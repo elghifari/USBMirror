@@ -1,0 +1,1116 @@
+using System.Runtime.InteropServices;
+using IPhoneMirror.App.Localization;
+using IPhoneMirror.App.Services;
+
+namespace IPhoneMirror.App.Interop;
+
+internal enum NativeResult : int
+{
+    Ok = 0,
+    BufferTooSmall = -3,
+    TransportUnavailable = -4,
+    DeviceNotFound = -6,
+    CaptureBackendUnavailable = -7,
+    SessionAlreadyExists = -8,
+    DriverSafetyBlocked = -9,
+    UsbConfigurationNotReady = -10,
+    SessionTeardownFailed = -11,
+    UsbConfigurationRestoreWarning = -12,
+}
+
+internal readonly record struct NativeSessionCreateResult(
+    bool Success, ulong Handle, int ErrorCode, string Message);
+
+internal sealed class UsbDeviceRefreshDeferredException(string message)
+    : InvalidOperationException(message);
+
+internal sealed class UsbConfigurationRestoreWarningException(
+    string message, int errorCode) : InvalidOperationException(message)
+{
+    internal int ErrorCode { get; } = errorCode;
+}
+
+internal enum ConnectionState : int
+{
+    Disconnected,
+    UsbPresentNoMux,
+    Connected,
+    Paired,
+    Ready,
+    Error,
+}
+
+internal enum CaptureState : int
+{
+    Idle,
+    ActivatingUsb,
+    WaitingForDevice,
+    Handshaking,
+    Streaming,
+    Stopping,
+    Stopped,
+    Error,
+}
+
+internal enum CaptureFailureKind : int
+{
+    None,
+    UsbConnection,
+    SessionCreation,
+    Driver,
+    VideoStream,
+    InvalidVideoDimensions,
+    NoVideoFrames,
+    SystemClosed,
+    DeviceDisconnected,
+    Timeout,
+    ExistingSession,
+    ChildProcessExited,
+    Unknown = 100,
+}
+
+internal enum CaptureFailureStage : int
+{
+    None,
+    UsbPreflight,
+    UsbActivation,
+    DeviceReenumeration,
+    InterfaceOpen,
+    QuickTimeHandshake,
+    VideoStream,
+    Decoder,
+    SessionTeardown,
+    DeviceDiscovery,
+}
+
+internal enum MonitorHdrCapability : uint
+{
+    Unknown,
+    Sdr,
+    Hdr,
+}
+
+internal enum DecoderSwitchState : uint
+{
+    Applied,
+    Pending,
+    Failed,
+}
+
+internal enum DecoderRuntimeMode : uint
+{
+    Unknown,
+    Hardware,
+    Software,
+    External,
+}
+
+internal enum MediaCastCommand : uint
+{
+    None,
+    Play,
+    Stop,
+    Pause,
+    Resume,
+    Seek,
+    Volume,
+}
+
+[Flags]
+internal enum MediaCastFlags : uint
+{
+    None = 0,
+    MuteSpecified = 1,
+    Muted = 2,
+}
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+internal struct NativeDeviceInfo
+{
+    public uint StructSize;
+    public uint ApiVersion;
+    public uint DeviceId;
+    public uint MuxPort;
+    public ConnectionState State;
+    public int UsbConnected;
+    public int PairRecordPresent;
+    public int LockdownAccessible;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string Udid;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string Name;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string ProductType;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string OsVersion;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string ConnectionType;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 192)] public string Status;
+}
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+internal struct NativeEnvironmentInfo
+{
+    public uint StructSize;
+    public uint ApiVersion;
+    public int ServiceInstalled;
+    public int ServiceRunning;
+    public int StandardMuxAvailable;
+    public int CaptureMuxAvailable;
+    public uint PhysicalAppleUsbDevices;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 512)] public string Diagnostic;
+    public int LibUsbRuntimeAvailable;
+    public int UsbDkBackendAvailable;
+    public uint LibUsbAppleDevices;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string LibUsbVersion;
+    public int UsbDkBackendKnown;
+    public int LibUsbAppleDevicesKnown;
+}
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+internal struct NativeCaptureStatus
+{
+    public uint StructSize;
+    public uint ApiVersion;
+    public CaptureState State;
+    public uint Width;
+    public uint Height;
+    public double Fps;
+    public double LatencyMs;
+    public ulong VideoFrames;
+    public ulong AudioPackets;
+    public uint AudioSampleRate;
+    public uint AudioChannels;
+    public CaptureFailureKind FailureKind;
+    public CaptureFailureStage FailureStage;
+    public int ErrorCode;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 192)] public string Message;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeVideoOutputStatus
+{
+    public uint StructSize;
+    public uint ApiVersion;
+    public MonitorHdrCapability MonitorHdrCapability;
+    public int SourceHdrKnown;
+    public int SourceHdr;
+    public int ActualHdrSurface;
+    public int HdrEffective;
+    public uint RequestedColorOutputPreference;
+    public uint RequestedDecoderPreference;
+    public uint AppliedDecoderPreference;
+    public DecoderSwitchState DecoderSwitchState;
+    public DecoderRuntimeMode DecoderRuntimeMode;
+    public ulong RequestedDecoderGeneration;
+    public ulong AppliedDecoderGeneration;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeVideoFrameInfo
+{
+    public uint StructSize;
+    public uint ApiVersion;
+    public uint Width;
+    public uint Height;
+    public uint Stride;
+    public uint PixelFormat;
+    public long Timestamp100Ns;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeAudioPacketInfo
+{
+    public uint StructSize;
+    public uint ApiVersion;
+    public ulong Sequence;
+    public uint SampleRate;
+    public ushort Channels;
+    public ushort BitsPerSample;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeCaptureOptions
+{
+    public uint StructSize;
+    public uint ApiVersion;
+    public uint RequestedWidth;
+    public uint RequestedHeight;
+    public uint TargetFps;
+    public int PlayAudio;
+    public float AudioVolume;
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 5)] public uint[] Reserved;
+}
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+internal struct NativeMediaCastRequest
+{
+    public uint StructSize;
+    public uint ApiVersion;
+    public ulong CommandId;
+    public MediaCastCommand Command;
+    public uint Reserved;
+    public double Duration;
+    public double StartPosition;
+    public double Volume;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 16384)] public string Url;
+}
+
+public sealed record VideoFrame(uint Width, uint Height, uint Stride, long Timestamp100Ns, byte[] Pixels);
+internal sealed record Nv12VideoFrame(uint Width, uint Height, uint Stride,
+    long Timestamp100Ns, byte[] Pixels);
+internal sealed record AudioPacket(ulong Sequence, uint SampleRate,
+    ushort Channels, ushort BitsPerSample, byte[] Pcm);
+internal sealed record MediaCastRequest(ulong CommandId, MediaCastCommand Command,
+    MediaCastFlags Flags, string Url, double Duration, double StartPosition,
+    double Volume);
+
+internal sealed class NativeCore : IDisposable
+{
+    private const string Library = "iPhoneMirror.Core";
+    private bool _initialized;
+    private byte[]? _frameBuffer;
+    private byte[]? _outputFrameBuffer;
+    private byte[]? _outputNv12FrameBuffer;
+    private byte[]? _outputAudioBuffer;
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_initialize();
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void im_shutdown();
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl,
+        CharSet = CharSet.Unicode)]
+    private static extern int im_log_message(
+        [MarshalAs(UnmanagedType.LPWStr)] string message);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_refresh_devices([Out] NativeDeviceInfo[]? devices, ref uint count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_refresh_devices_ex([Out] NativeDeviceInfo[]? devices,
+        ref uint count, int refreshMetadata);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+    private static extern int im_wireless_receiver_start(
+        [MarshalAs(UnmanagedType.LPWStr)] string receiverName,
+        [MarshalAs(UnmanagedType.LPWStr)] string hostPath);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+    private static extern int im_wireless_receiver_start_ex(
+        [MarshalAs(UnmanagedType.LPWStr)] string receiverName,
+        [MarshalAs(UnmanagedType.LPWStr)] string hostPath,
+        uint width, uint height, uint frameRate);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void im_wireless_receiver_stop();
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_wireless_receiver_get_status(out int running, out int ready);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_refresh_wireless_devices(
+        [Out] NativeDeviceInfo[]? devices, ref uint count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+    private static extern int im_media_cast_receiver_start(
+        [MarshalAs(UnmanagedType.LPWStr)] string receiverName,
+        [MarshalAs(UnmanagedType.LPWStr)] string hostPath);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void im_media_cast_receiver_stop();
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_media_cast_receiver_get_status(out int running, out int ready);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_media_cast_get_request(ref NativeMediaCastRequest request);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_media_cast_set_playback_state(
+        ulong commandId, double duration, double position, double rate);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_media_cast_request_stop();
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_get_environment(ref NativeEnvironmentInfo environment);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+    private static extern int im_is_libusb0_device_available(
+        [MarshalAs(UnmanagedType.LPWStr)] string udid, out int available);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+    private static extern int im_start_capture([MarshalAs(UnmanagedType.LPWStr)] string udid);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+    private static extern int im_start_capture_ex(
+        [MarshalAs(UnmanagedType.LPWStr)] string udid, int playAudio);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_stop_capture();
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_set_audio_enabled(int enabled);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_set_audio_volume(float volume);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_set_video_preferences(uint width, uint height, uint maxFps);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_get_capture_status(ref NativeCaptureStatus status);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_copy_latest_video_frame(
+        ref NativeVideoFrameInfo info, [Out] byte[]? buffer, ref uint bufferSize);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_attach_preview_window(nint hwnd);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void im_detach_preview_window();
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_force_preview_refresh();
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_set_preview_corner_profile(float normalizedRadius, float curveExponent);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+    private static extern int im_session_create([MarshalAs(UnmanagedType.LPWStr)] string udid,
+        ref NativeCaptureOptions options, out ulong handle);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+    private static extern int im_wireless_session_create(
+        [MarshalAs(UnmanagedType.LPWStr)] string deviceId,
+        ref NativeCaptureOptions options, out ulong handle);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_stop(ulong handle);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void im_session_destroy(ulong handle);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_get_status(ulong handle, ref NativeCaptureStatus status);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_get_video_output_status(ulong handle, nint hwnd,
+        ref NativeVideoOutputStatus status);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_attach_preview(ulong handle, nint hwnd);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void im_session_detach_preview(ulong handle, nint hwnd);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_set_video_preferences(ulong handle, uint width, uint height, uint fps);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_set_pipeline_preferences(ulong handle,
+        uint decoderPreference, uint colorOutputPreference);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_set_image_adjustments(ulong handle,
+        float brightness, float contrast, float saturation, float gamma);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_set_audio_enabled(ulong handle, int enabled);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_set_audio_volume(ulong handle, float volume);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_set_corner_profile(ulong handle, float radius, float exponent);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_copy_latest_video_frame(ulong handle,
+        ref NativeVideoFrameInfo info, [Out] byte[]? buffer, ref uint bufferSize,
+        uint maxWidth, uint maxHeight);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_copy_latest_video_frame_nv12(ulong handle,
+        ref NativeVideoFrameInfo info, [Out] byte[]? buffer, ref uint bufferSize,
+        uint outputWidth, uint outputHeight);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_copy_next_audio_packet(ulong handle,
+        ulong afterSequence, ref NativeAudioPacketInfo info, [Out] byte[]? buffer,
+        ref uint bufferSize);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_force_preview_refresh(ulong handle);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_get_latest_video_timestamp(ulong handle,
+        out long timestamp100Ns);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_set_window_corner_profile(ulong handle, nint hwnd,
+        float radius, float exponent);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int im_session_set_window_rotation(ulong handle, nint hwnd,
+        int quarterTurns);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    private static extern nint im_last_error();
+
+    private static long _selectedPreviewSession;
+    private static nint _selectedPreviewWindow;
+    private static readonly object PreviewSelectionGate = new();
+
+    internal static void SelectPreviewSession(ulong handle)
+    {
+        lock (PreviewSelectionGate)
+        {
+            var previous = unchecked((ulong)_selectedPreviewSession);
+            if (previous == handle) return;
+
+            // Release the HWND before publishing its new owner. Flip-model
+            // swap chains cannot overlap on the same window, even briefly.
+            if (_selectedPreviewWindow != 0)
+            {
+                if (previous != 0)
+                    im_session_detach_preview(previous, _selectedPreviewWindow);
+                else
+                    im_detach_preview_window();
+            }
+            else if (previous == 0 && handle != 0)
+            {
+                im_detach_preview_window();
+            }
+
+            _selectedPreviewSession = unchecked((long)handle);
+        }
+    }
+
+    internal static bool AttachPreviewWindow(nint hwnd)
+    {
+        if (hwnd == 0) return false;
+        lock (PreviewSelectionGate)
+        {
+            var handle = unchecked((ulong)_selectedPreviewSession);
+            var attached = handle != 0 ? im_session_attach_preview(handle, hwnd) == 0
+                : im_attach_preview_window(hwnd) == 0;
+            if (attached) _selectedPreviewWindow = hwnd;
+            return attached;
+        }
+    }
+
+    internal static void DetachPreviewWindow()
+    {
+        lock (PreviewSelectionGate)
+        {
+            var handle = unchecked((ulong)_selectedPreviewSession);
+            if (handle != 0 && _selectedPreviewWindow != 0)
+                im_session_detach_preview(handle, _selectedPreviewWindow);
+            else im_detach_preview_window();
+            _selectedPreviewWindow = 0;
+        }
+    }
+
+    internal static bool AttachDevicePreview(ulong handle, nint hwnd) =>
+        handle != 0 && hwnd != 0 && im_session_attach_preview(handle, hwnd) == 0;
+
+    internal static void DetachDevicePreview(ulong handle, nint hwnd)
+    {
+        if (handle != 0 && hwnd != 0) im_session_detach_preview(handle, hwnd);
+    }
+
+    internal static bool SetDeviceWindowCornerProfile(ulong handle, nint hwnd,
+        double radius, double exponent) => handle != 0 && hwnd != 0 &&
+        im_session_set_window_corner_profile(handle, hwnd,
+            Math.Clamp((float)radius, 0, 0.5f), Math.Clamp((float)exponent, 1.5f, 8)) == 0;
+
+    internal static bool SetDeviceWindowRotation(ulong handle, nint hwnd, int turns) =>
+        handle != 0 && hwnd != 0 && im_session_set_window_rotation(handle, hwnd, turns) == 0;
+
+    internal static bool ForcePreviewRefresh()
+    {
+        try
+        {
+            lock (PreviewSelectionGate)
+            {
+                var handle = unchecked((ulong)_selectedPreviewSession);
+                return (handle != 0 ? im_session_force_preview_refresh(handle)
+                    : im_force_preview_refresh()) == 0;
+            }
+        }
+        catch (EntryPointNotFoundException error)
+        {
+            DiagnosticLogger.ExceptionOnce("native-force-refresh", "native",
+                "force_refresh_entrypoint_missing", error);
+            return false;
+        }
+    }
+
+    internal static bool ForceDevicePreviewRefresh(ulong handle)
+    {
+        if (handle == 0) return false;
+        try { return im_session_force_preview_refresh(handle) == 0; }
+        catch (Exception error) when (error is EntryPointNotFoundException or
+                                      DllNotFoundException)
+        {
+            DiagnosticLogger.ExceptionOnce("native-session-force-refresh", "native",
+                "session_force_refresh_unavailable", error);
+            return false;
+        }
+    }
+
+    internal static bool SetPreviewCornerProfile(double normalizedRadius, double curveExponent)
+    {
+        try
+        {
+            var handle = unchecked((ulong)Interlocked.Read(ref _selectedPreviewSession));
+            if (handle != 0) return SetDeviceCornerProfile(handle, normalizedRadius, curveExponent);
+            return im_set_preview_corner_profile(
+                Math.Clamp((float)normalizedRadius, 0.0f, 0.5f),
+                Math.Clamp((float)curveExponent, 1.5f, 8.0f)) == 0;
+        }
+        catch (EntryPointNotFoundException error)
+        {
+            // A mismatched older native DLL should keep rendering with its
+            // historical iPhone curve instead of crashing the GUI.
+            DiagnosticLogger.ExceptionOnce("native-corner-profile", "native",
+                "corner_profile_entrypoint_missing", error);
+            return false;
+        }
+    }
+
+    public NativeCore()
+    {
+        var result = im_initialize();
+        if (result != 0) throw new InvalidOperationException(GetLastError(
+            LocalizationService.Get("NativeCoreInitFailed")));
+        _initialized = true;
+    }
+
+    public NativeEnvironmentInfo GetEnvironment()
+    {
+        var info = new NativeEnvironmentInfo
+        {
+            StructSize = (uint)Marshal.SizeOf<NativeEnvironmentInfo>(),
+            Diagnostic = string.Empty,
+            LibUsbVersion = string.Empty,
+        };
+        var result = im_get_environment(ref info);
+        if (result != 0) throw new InvalidOperationException(GetLastError(
+            LocalizationService.Get("ReadEnvironmentFailed")));
+        return info;
+    }
+
+    /// <summary>
+    /// Checks whether libusb0 can enumerate and open this exact iPhone serial.
+    /// Call only after an explicit wired-capture action: even this read-only
+    /// enumeration enters the legacy kernel filter and can bugcheck an
+    /// incompatible driver stack. It never changes the active USB
+    /// configuration or driver state.
+    /// </summary>
+    public bool IsLibUsb0DeviceAvailable(string udid)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(udid);
+        var result = im_is_libusb0_device_available(udid, out var available);
+        if (result != 0)
+            throw new InvalidOperationException(GetLastError(
+                LocalizationService.Get("ReadEnvironmentFailed")));
+        return available != 0;
+    }
+
+    public IReadOnlyList<NativeDeviceInfo> GetDevices(bool refreshMetadata = false)
+    {
+        // usbmux is live state: another iPhone can appear or disappear between
+        // the count query and the fill call. Retry a changed-size snapshot and
+        // return only the entries actually written by the native core.
+        for (var attempt = 0; attempt < 3; ++attempt)
+        {
+            uint count = 0;
+            var result = im_refresh_devices_ex(null, ref count,
+                refreshMetadata ? 1 : 0);
+            if (result == (int)NativeResult.UsbConfigurationNotReady)
+                throw new UsbDeviceRefreshDeferredException(GetLastError(
+                    LocalizationService.Get("EnumerateDevicesFailed")));
+            if (result != 0) throw new InvalidOperationException(GetLastError(
+                LocalizationService.Get("EnumerateDevicesFailed")));
+            if (count == 0) return [];
+
+            var devices = new NativeDeviceInfo[count];
+            for (var i = 0; i < devices.Length; i++)
+            {
+                devices[i].StructSize = (uint)Marshal.SizeOf<NativeDeviceInfo>();
+                devices[i].Udid = string.Empty;
+                devices[i].Name = string.Empty;
+                devices[i].ProductType = string.Empty;
+                devices[i].OsVersion = string.Empty;
+                devices[i].ConnectionType = string.Empty;
+                devices[i].Status = string.Empty;
+            }
+            var capacity = count;
+            result = im_refresh_devices_ex(devices, ref capacity,
+                refreshMetadata ? 1 : 0);
+            if (result == (int)NativeResult.BufferTooSmall) continue;
+            if (result == (int)NativeResult.UsbConfigurationNotReady)
+                throw new UsbDeviceRefreshDeferredException(GetLastError(
+                    LocalizationService.Get("ReadDeviceInfoFailed")));
+            if (result != 0) throw new InvalidOperationException(GetLastError(
+                LocalizationService.Get("ReadDeviceInfoFailed")));
+            return devices.Take(checked((int)Math.Min(capacity, (uint)devices.Length))).ToArray();
+        }
+
+        throw new InvalidOperationException(LocalizationService.Get("EnumerateDevicesFailed"));
+    }
+
+    public (bool Success, string Message) StartWirelessReceiver(
+        string receiverName, string hostPath, uint width, uint height, uint frameRate)
+    {
+        var result = im_wireless_receiver_start_ex(
+            receiverName, hostPath, width, height, frameRate);
+        return result == 0
+            ? (true, LocalizationService.Get("WirelessReady"))
+            : (false, GetLastError(LocalizationService.Get("WirelessReceiverMissing")));
+    }
+
+    public (bool Running, bool Ready) GetWirelessReceiverStatus()
+    {
+        var result = im_wireless_receiver_get_status(out var running, out var ready);
+        return result == 0 ? (running != 0, ready != 0) : (false, false);
+    }
+
+    public void StopWirelessReceiver() => im_wireless_receiver_stop();
+
+    public (bool Success, string Message) StartMediaCastReceiver(
+        string receiverName, string hostPath)
+    {
+        var result = im_media_cast_receiver_start(receiverName, hostPath);
+        return result == 0
+            ? (true, LocalizationService.Get("MediaCastReady"))
+            : (false, GetLastError(LocalizationService.Get("MediaCastReceiverMissing")));
+    }
+
+    public (bool Running, bool Ready) GetMediaCastReceiverStatus()
+    {
+        var result = im_media_cast_receiver_get_status(out var running, out var ready);
+        return result == 0 ? (running != 0, ready != 0) : (false, false);
+    }
+
+    public MediaCastRequest? GetMediaCastRequest()
+    {
+        var request = new NativeMediaCastRequest
+        {
+            StructSize = (uint)Marshal.SizeOf<NativeMediaCastRequest>(),
+            Url = string.Empty,
+        };
+        return im_media_cast_get_request(ref request) == 0 &&
+            request.Command != MediaCastCommand.None
+            ? new(request.CommandId, request.Command,
+                (MediaCastFlags)request.Reserved, request.Url,
+                request.Duration, request.StartPosition, request.Volume)
+            : null;
+    }
+
+    public bool SetMediaCastPlaybackState(ulong commandId,
+        double duration, double position, double rate) =>
+        im_media_cast_set_playback_state(commandId, duration, position, rate) == 0;
+
+    public (bool Success, string Message) RequestMediaCastStop()
+    {
+        var result = im_media_cast_request_stop();
+        return result == 0
+            ? (true, LocalizationService.Get("MediaCastStopped"))
+            : (false, GetLastError(LocalizationService.Get(
+                "MediaCastStopRequestFailed")));
+    }
+
+    public bool WriteLog(string message)
+    {
+        if (!_initialized || string.IsNullOrWhiteSpace(message)) return false;
+        try
+        {
+            return im_log_message(message) == 0;
+        }
+        catch (EntryPointNotFoundException error)
+        {
+            DiagnosticLogger.ExceptionOnce("native-log-entrypoint", "native",
+                "log_entrypoint_missing", error);
+            return false;
+        }
+    }
+
+    public void StopMediaCastReceiver() => im_media_cast_receiver_stop();
+
+    public IReadOnlyList<NativeDeviceInfo> GetWirelessDevices()
+    {
+        for (var attempt = 0; attempt < 3; ++attempt)
+        {
+            uint count = 0;
+            var result = im_refresh_wireless_devices(null, ref count);
+            if (result != 0) throw new InvalidOperationException(GetLastError(
+                LocalizationService.Get("EnumerateDevicesFailed")));
+            if (count == 0) return [];
+
+            var devices = new NativeDeviceInfo[count];
+            for (var i = 0; i < devices.Length; ++i)
+            {
+                devices[i].StructSize = (uint)Marshal.SizeOf<NativeDeviceInfo>();
+                devices[i].Udid = string.Empty;
+                devices[i].Name = string.Empty;
+                devices[i].ProductType = string.Empty;
+                devices[i].OsVersion = string.Empty;
+                devices[i].ConnectionType = string.Empty;
+                devices[i].Status = string.Empty;
+            }
+            var capacity = count;
+            result = im_refresh_wireless_devices(devices, ref capacity);
+            if (result == (int)NativeResult.BufferTooSmall) continue;
+            if (result != 0) throw new InvalidOperationException(GetLastError(
+                LocalizationService.Get("EnumerateDevicesFailed")));
+            return devices.Take(checked((int)Math.Min(capacity, (uint)devices.Length))).ToArray();
+        }
+        throw new InvalidOperationException(LocalizationService.Get("EnumerateDevicesFailed"));
+    }
+
+    public (bool Success, string Message) StartCapture(string udid, bool playAudio = true)
+    {
+        var result = im_start_capture_ex(udid, playAudio ? 1 : 0);
+        return result == 0
+            ? (true, LocalizationService.Get("CaptureStarted"))
+            : (false, GetLastError(LocalizationService.Get("CannotStartCapture")));
+    }
+
+    public NativeSessionCreateResult CreateDeviceSession(string udid,
+        uint width, uint height, uint fps, bool playAudio, double volume,
+        uint usbWidth = 0, uint usbHeight = 0, uint usbProjectionMode = 0,
+        uint decoderPreference = 0, uint colorOutputPreference = 0)
+    {
+        var options = new NativeCaptureOptions
+        {
+            StructSize = (uint)Marshal.SizeOf<NativeCaptureOptions>(),
+            ApiVersion = 18,
+            RequestedWidth = width,
+            RequestedHeight = height,
+            TargetFps = fps,
+            PlayAudio = playAudio ? 1 : 0,
+            AudioVolume = Math.Clamp((float)volume, 0, 1),
+            Reserved = new uint[5],
+        };
+        options.Reserved[0] = usbWidth;
+        options.Reserved[1] = usbHeight;
+        options.Reserved[2] = Math.Min(usbProjectionMode, 2U);
+        options.Reserved[3] = Math.Min(decoderPreference, 2U);
+        options.Reserved[4] = Math.Min(colorOutputPreference, 2U);
+        var result = im_session_create(udid, ref options, out var handle);
+        return result == 0
+            ? new(true, handle, 0, LocalizationService.Get("CaptureStarted"))
+            : new(false, 0, result,
+                GetLastError(LocalizationService.Get("CannotStartCapture")));
+    }
+
+    public NativeSessionCreateResult CreateWirelessSession(
+        string deviceId, uint width, uint height, uint fps,
+        bool playAudio, double volume)
+    {
+        var options = new NativeCaptureOptions
+        {
+            StructSize = (uint)Marshal.SizeOf<NativeCaptureOptions>(),
+            ApiVersion = 18,
+            RequestedWidth = width,
+            RequestedHeight = height,
+            TargetFps = fps,
+            PlayAudio = playAudio ? 1 : 0,
+            AudioVolume = Math.Clamp((float)volume, 0, 1),
+            Reserved = new uint[5],
+        };
+        var result = im_wireless_session_create(deviceId, ref options, out var handle);
+        return result == 0
+            ? new(true, handle, 0, LocalizationService.Get("CaptureStarted"))
+            : new(false, 0, result,
+                GetLastError(LocalizationService.Get("CannotStartCapture")));
+    }
+
+    public void StopDeviceSession(ulong handle)
+    {
+        if (handle == 0) return;
+        var result = im_session_stop(handle);
+        if (result == 0) return;
+        var message = GetLastError(
+            $"{LocalizationService.Get("StopFailedFormat")} (error {result})");
+        if (result == (int)NativeResult.UsbConfigurationRestoreWarning)
+            throw new UsbConfigurationRestoreWarningException(message, result);
+        throw new InvalidOperationException(message);
+    }
+
+    public void DestroyDeviceSession(ulong handle)
+    {
+        if (handle != 0) im_session_destroy(handle);
+    }
+
+    public NativeCaptureStatus GetDeviceSessionStatus(ulong handle)
+    {
+        var status = new NativeCaptureStatus
+        {
+            StructSize = (uint)Marshal.SizeOf<NativeCaptureStatus>(),
+            Message = string.Empty,
+        };
+        var result = im_session_get_status(handle, ref status);
+        if (result != 0) throw new InvalidOperationException(GetLastError(
+            LocalizationService.Get("ReadCaptureStatusFailed")));
+        return status;
+    }
+
+    public long GetDeviceSessionLatestFrameTimestamp(ulong handle)
+    {
+        if (handle == 0) return 0;
+        try
+        {
+            return im_session_get_latest_video_timestamp(handle,
+                out var timestamp) == 0 ? timestamp : 0;
+        }
+        catch (Exception error) when (error is EntryPointNotFoundException or
+                                      DllNotFoundException)
+        {
+            DiagnosticLogger.ExceptionOnce("native-session-frame-timestamp", "native",
+                "session_frame_timestamp_unavailable", error);
+            return 0;
+        }
+    }
+
+    public bool TryGetDeviceVideoOutputStatus(ulong handle,
+        out NativeVideoOutputStatus status)
+    {
+        status = new NativeVideoOutputStatus
+        {
+            StructSize = (uint)Marshal.SizeOf<NativeVideoOutputStatus>(),
+        };
+        if (handle == 0) return false;
+        try
+        {
+            // Decoder state belongs to the capture session, not to whichever
+            // HWND currently owns its preview. Passing no HWND deliberately
+            // avoids treating a detached, hidden, or transitioning preview as
+            // an unavailable decoder and leaving the UI at "detecting".
+            return im_session_get_video_output_status(handle, 0, ref status) == 0;
+        }
+        catch (Exception error) when (error is EntryPointNotFoundException or
+                                      DllNotFoundException)
+        {
+            DiagnosticLogger.ExceptionOnce("native-video-output-status", "native",
+                "video_output_status_unavailable", error);
+            return false;
+        }
+    }
+
+    public (bool Success, string Message) SetDeviceVideoPreferences(ulong handle,
+        uint width, uint height, uint fps)
+    {
+        var result = im_session_set_video_preferences(handle, width, height, fps);
+        return result == 0 ? (true, LocalizationService.Get("VideoPreferencesApplied"))
+            : (false, GetLastError(LocalizationService.Get("VideoPreferencesUpdateFailed")));
+    }
+
+    public (bool Success, string Message) SetDevicePipelinePreferences(ulong handle,
+        uint decoderPreference, uint colorOutputPreference)
+    {
+        if (handle == 0) return (false, LocalizationService.Get("VideoPreferencesUpdateFailed"));
+        try
+        {
+            var result = im_session_set_pipeline_preferences(handle,
+                Math.Min(decoderPreference, 2U), Math.Min(colorOutputPreference, 2U));
+            return result == 0
+                ? (true, LocalizationService.Get("VideoPreferencesApplied"))
+                : (false, GetLastError(LocalizationService.Get("VideoPreferencesUpdateFailed")));
+        }
+        catch (Exception error) when (error is EntryPointNotFoundException or DllNotFoundException)
+        {
+            DiagnosticLogger.ExceptionOnce("native-pipeline-preferences", "native",
+                "pipeline_preferences_unavailable", error);
+            return (false, error.Message);
+        }
+    }
+
+    public (bool Success, string Message) SetDeviceImageAdjustments(ulong handle,
+        double brightness, double contrast, double saturation, double gamma)
+    {
+        if (handle == 0)
+            return (false, LocalizationService.Get("VideoPreferencesUpdateFailed"));
+        try
+        {
+            var result = im_session_set_image_adjustments(handle,
+                Math.Clamp((float)brightness / 100.0f, -1.0f, 1.0f),
+                Math.Clamp((float)contrast / 100.0f, 0.0f, 2.0f),
+                Math.Clamp((float)saturation / 100.0f, 0.0f, 2.0f),
+                Math.Clamp((float)gamma / 100.0f, 0.5f, 2.0f));
+            return result == 0
+                ? (true, LocalizationService.Get("ImageAdjustmentsApplied"))
+                : (false, GetLastError(LocalizationService.Get(
+                    "ImageAdjustmentsUpdateFailed")));
+        }
+        catch (Exception error) when (error is EntryPointNotFoundException or
+                                      DllNotFoundException)
+        {
+            DiagnosticLogger.ExceptionOnce("native-image-adjustments", "native",
+                "image_adjustments_unavailable", error);
+            return (false, error.Message);
+        }
+    }
+
+    public void SetDeviceAudioEnabled(ulong handle, bool enabled)
+    {
+        if (im_session_set_audio_enabled(handle, enabled ? 1 : 0) != 0)
+            throw new InvalidOperationException(GetLastError(LocalizationService.Get("AudioStateUpdateFailed")));
+    }
+
+    public void SetDeviceAudioVolume(ulong handle, double volume)
+    {
+        if (im_session_set_audio_volume(handle, Math.Clamp((float)volume, 0, 1)) != 0)
+            throw new InvalidOperationException(GetLastError(LocalizationService.Get("AudioVolumeUpdateFailed")));
+    }
+
+    internal static bool SetDeviceCornerProfile(ulong handle, double radius, double exponent) =>
+        handle != 0 && im_session_set_corner_profile(handle,
+            Math.Clamp((float)radius, 0, 0.5f), Math.Clamp((float)exponent, 1.5f, 8)) == 0;
+
+    public void StopCapture() => im_stop_capture();
+
+    public (bool Success, string Message) SetAudioEnabled(bool enabled)
+    {
+        try
+        {
+            var result = im_set_audio_enabled(enabled ? 1 : 0);
+            return result == 0
+                ? (true, LocalizationService.Get(enabled ? "AudioPlaybackEnabled" : "AudioPlaybackMuted"))
+                : (false, GetLastError(LocalizationService.Get("AudioStateUpdateFailed")));
+        }
+        catch (EntryPointNotFoundException error)
+        {
+            DiagnosticLogger.ExceptionOnce("native-audio-toggle", "native",
+                "audio_toggle_entrypoint_missing", error);
+            return (false, LocalizationService.Get("AudioToggleUnsupported"));
+        }
+    }
+
+    public (bool Success, string Message) SetAudioVolume(double volume)
+    {
+        try
+        {
+            var normalized = Math.Clamp((float)volume, 0.0f, 1.0f);
+            var result = im_set_audio_volume(normalized);
+            return result == 0
+                ? (true, LocalizationService.Format("AudioVolumeFormat", normalized * 100))
+                : (false, GetLastError(LocalizationService.Get("AudioVolumeUpdateFailed")));
+        }
+        catch (EntryPointNotFoundException error)
+        {
+            DiagnosticLogger.ExceptionOnce("native-audio-volume", "native",
+                "audio_volume_entrypoint_missing", error);
+            return (false, LocalizationService.Get("AudioVolumeUnsupported"));
+        }
+    }
+
+    public (bool Success, string Message) SetVideoPreferences(uint width, uint height, uint maxFps)
+    {
+        try
+        {
+            var result = im_set_video_preferences(width, height, maxFps);
+            return result == 0
+                ? (true, LocalizationService.Get("VideoPreferencesApplied"))
+                : (false, GetLastError(LocalizationService.Get("VideoPreferencesUpdateFailed")));
+        }
+        catch (EntryPointNotFoundException error)
+        {
+            DiagnosticLogger.ExceptionOnce("native-video-preferences", "native",
+                "video_preferences_entrypoint_missing", error);
+            return (false, LocalizationService.Get("VideoPreferencesUnsupported"));
+        }
+    }
+
+    public NativeCaptureStatus GetCaptureStatus()
+    {
+        var status = new NativeCaptureStatus
+        {
+            StructSize = (uint)Marshal.SizeOf<NativeCaptureStatus>(),
+            Message = string.Empty,
+        };
+        var result = im_get_capture_status(ref status);
+        if (result != 0) throw new InvalidOperationException(GetLastError(
+            LocalizationService.Get("ReadCaptureStatusFailed")));
+        return status;
+    }
+
+    public VideoFrame? GetLatestVideoFrame()
+    {
+        var info = new NativeVideoFrameInfo { StructSize = (uint)Marshal.SizeOf<NativeVideoFrameInfo>() };
+        uint size = (uint)(_frameBuffer?.Length ?? 0);
+        var handle = unchecked((ulong)Interlocked.Read(ref _selectedPreviewSession));
+        var result = handle != 0
+            ? im_session_copy_latest_video_frame(handle, ref info, _frameBuffer, ref size, 0, 0)
+            : im_copy_latest_video_frame(ref info, _frameBuffer, ref size);
+        if (result == (int)NativeResult.BufferTooSmall)
+        {
+            _frameBuffer = new byte[size];
+            info.StructSize = (uint)Marshal.SizeOf<NativeVideoFrameInfo>();
+            result = handle != 0
+                ? im_session_copy_latest_video_frame(handle, ref info, _frameBuffer, ref size, 0, 0)
+                : im_copy_latest_video_frame(ref info, _frameBuffer, ref size);
+        }
+        if (result != 0 || _frameBuffer is null) return null;
+        return new VideoFrame(info.Width, info.Height, info.Stride, info.Timestamp100Ns, _frameBuffer);
+    }
+
+    internal VideoFrame? GetDeviceOutputFrame(ulong handle, uint width, uint height)
+    {
+        if (handle == 0) return null;
+        var info = new NativeVideoFrameInfo
+        {
+            StructSize = (uint)Marshal.SizeOf<NativeVideoFrameInfo>(),
+        };
+        uint size = (uint)(_outputFrameBuffer?.Length ?? 0);
+        var result = im_session_copy_latest_video_frame(handle, ref info,
+            _outputFrameBuffer, ref size, width, height);
+        if (result == (int)NativeResult.BufferTooSmall)
+        {
+            _outputFrameBuffer = new byte[size];
+            info.StructSize = (uint)Marshal.SizeOf<NativeVideoFrameInfo>();
+            result = im_session_copy_latest_video_frame(handle, ref info,
+                _outputFrameBuffer, ref size, width, height);
+        }
+        if (result != 0 || _outputFrameBuffer is null) return null;
+        return new VideoFrame(info.Width, info.Height, info.Stride,
+            info.Timestamp100Ns, _outputFrameBuffer);
+    }
+
+    internal Nv12VideoFrame? GetDeviceOutputNv12Frame(ulong handle, uint width,
+        uint height)
+    {
+        if (handle == 0) return null;
+        var info = new NativeVideoFrameInfo
+        {
+            StructSize = (uint)Marshal.SizeOf<NativeVideoFrameInfo>(),
+        };
+        uint size = (uint)(_outputNv12FrameBuffer?.Length ?? 0);
+        var result = im_session_copy_latest_video_frame_nv12(handle, ref info,
+            _outputNv12FrameBuffer, ref size, width, height);
+        if (result == (int)NativeResult.BufferTooSmall)
+        {
+            _outputNv12FrameBuffer = new byte[size];
+            info.StructSize = (uint)Marshal.SizeOf<NativeVideoFrameInfo>();
+            result = im_session_copy_latest_video_frame_nv12(handle, ref info,
+                _outputNv12FrameBuffer, ref size, width, height);
+        }
+        if (result != 0 || _outputNv12FrameBuffer is null ||
+            info.PixelFormat != 2)
+            return null;
+        return new Nv12VideoFrame(info.Width, info.Height, info.Stride,
+            info.Timestamp100Ns, _outputNv12FrameBuffer);
+    }
+
+    internal AudioPacket? GetDeviceOutputAudioPacket(ulong handle,
+        ulong afterSequence)
+    {
+        if (handle == 0) return null;
+        var info = new NativeAudioPacketInfo
+        {
+            StructSize = (uint)Marshal.SizeOf<NativeAudioPacketInfo>(),
+        };
+        uint size = (uint)(_outputAudioBuffer?.Length ?? 0);
+        var result = im_session_copy_next_audio_packet(handle, afterSequence,
+            ref info, _outputAudioBuffer, ref size);
+        if (result == (int)NativeResult.BufferTooSmall)
+        {
+            _outputAudioBuffer = new byte[size];
+            info.StructSize = (uint)Marshal.SizeOf<NativeAudioPacketInfo>();
+            result = im_session_copy_next_audio_packet(handle, afterSequence,
+                ref info, _outputAudioBuffer, ref size);
+        }
+        if (result == (int)NativeResult.CaptureBackendUnavailable) return null;
+        if (result != 0 || _outputAudioBuffer is null || size == 0) return null;
+        return new AudioPacket(info.Sequence, info.SampleRate, info.Channels,
+            info.BitsPerSample, _outputAudioBuffer.AsSpan(0, checked((int)size)).ToArray());
+    }
+
+    private static string GetLastError(string fallback)
+    {
+        var pointer = im_last_error();
+        return pointer == 0 ? fallback : Marshal.PtrToStringUni(pointer) ?? fallback;
+    }
+
+    public void Dispose()
+    {
+        if (!_initialized) return;
+        im_shutdown();
+        _initialized = false;
+    }
+}

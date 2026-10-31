@@ -1,0 +1,450 @@
+<p align="center">
+  <img src="src/App/Assets/iPhoneMirror.png" width="112" alt="iPhoneMirror icon">
+</p>
+
+<h1 align="center">iPhoneMirror</h1>
+
+<p align="center">
+  Windows 上通过 USB 或 AirPlay 进行低延迟 iPhone 屏幕与系统声音采集。<br>
+  Low-latency USB and AirPlay iPhone mirroring for Windows.
+</p>
+
+<p align="center"><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
+
+<p align="center">
+  <a href="https://github.com/RayrenSX/iPhoneMirror/releases"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/RayrenSX/iPhoneMirror?include_prereleases&sort=semver"></a>
+  <a href="https://github.com/RayrenSX/iPhoneMirror/actions/workflows/windows-build.yml"><img alt="Windows build" src="https://github.com/RayrenSX/iPhoneMirror/actions/workflows/windows-build.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="GPL v3 License" src="https://img.shields.io/badge/license-GPL--3.0--only-3DA639.svg"></a>
+  <img alt="Windows 10 and 11 x64" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4">
+</p>
+
+> [!IMPORTANT]
+> 当前是公开预览版，尚未进行商业 Authenticode 签名，Windows 可能显示 SmartScreen
+> 或“未知发布者”提示。Apple Screen Capture 使用私有协议，未来 iOS 更新可能需要适配。
+> 官方构建目前仅支持 Windows x64；Windows ARM64 因 USB 内核驱动和无线运行库缺少 ARM64
+> 版本而不受支持。
+
+> [!TIP]
+> ### 特别致谢：Linux 移植
+>
+> 特别感谢 **[@furruka](https://github.com/furruka)** 基于本项目开展 Linux 原生移植，
+> 并维护了独立的 [Linux 适配分支](https://github.com/furruka/iPhoneMirror)。这项工作
+> 将 iPhoneMirror 的 USB 与 AirPlay 投屏链路向 Linux 平台延伸，针对 GUI、渲染、音频、
+> 视频解码、USB 通信和设备发现等 Windows 专有部分进行原生适配，同时尽力保持上游
+> 协议层与策略层行为一致。
+>
+> 该移植仍在积极开发中，当前尚未提供可用的 Linux 发布包；具体进度、构建方式和已知限制
+> 请以 [Linux 适配说明](https://github.com/furruka/iPhoneMirror/blob/linux-port/docs/LINUX_PORT.md)
+> 为准。再次感谢 furruka 的投入与贡献，也欢迎 Linux 用户关注并支持这项工作。
+
+## 社区交流
+
+欢迎加入 QQ 群，与其他用户交流使用体验、反馈问题、讨论功能建议。
+
+QQ群号：**1050045279**
+
+## 项目描述
+
+当前最新正式版为 `v1.8.3`。iPhoneMirror 是一个面向 Windows 10/11 x64 的本地
+iPhone/iPad 投屏与蓝牙反向控制工具，目标是
+在不依赖云端中转的情况下，将 USB 有线采集和局域网 AirPlay 接收统一到同一套
+预览、音频、截图、独立窗口、OBS 和多设备会话能力中。
+
+项目由四个清晰边界组成：C++ 核心负责 Apple 私有 USB 协议、QuickTime/CoreMedia
+解析、H.264 解码、D3D11 渲染和 WASAPI 音频；WPF 主程序负责设备列表、会话控制
+和用户界面；独立无线宿主负责 AirPlay 协议与解码，并通过有界命名管道传递媒体帧；
+驱动安装、修复和卸载由单独的 `iPhoneMirror.Driver.exe` 负责，主程序只读检查
+有线设备状态，不在投屏进程中修改系统驱动。
+
+> [!TIP]
+> 从安装驱动到 USB、AirPlay、多设备、独立窗口和 OBS 的完整步骤，请阅读
+> [完整使用教程](docs/USER_GUIDE.md)。
+
+## 核心亮点
+
+### 按真实 iPhone/iPad 外形适配
+
+iPhoneMirror 不给所有设备套用同一个通用圆角。程序会根据 Apple `ProductType`
+识别 iPhone X、刘海屏、mini、标准/Max、Dynamic Island，以及 iPad Pro、Air、mini
+和全面屏基础款等机型族，为每台设备匹配独立的屏幕圆角、曲线和裁切配置。带 Home 键
+或已知直角屏设备保持直角；未知新设备会根据画面比例保守回退，避免把 iPad 误裁成手机。
+
+这套适配同时作用于原生渲染和独立窗口轮廓。拖动、等比例缩放、横竖屏切换和全屏时，
+窗口仍保持对应设备的视觉形状；用户也可以通过右键菜单手动去除或恢复圆角。
+圆角参数属于基于公开外观和画面比例的视觉拟合，并非 Apple 公布的工业尺寸数据。
+
+### 双通道、多设备和本地原生渲染
+
+- USB 私有 Screen Capture 与局域网 AirPlay 使用同一套设备、预览、声音和 OBS 工作流；
+- 每台设备拥有独立会话和独立窗口，可同时运行，不必切换时停止上一台；
+- 设备卡片支持长按拖动排序，无线设备刚连接时只自动切换一次；
+- H.264/CoreMedia 与 AirPlay 屏幕镜像帧在本机解码，通过 D3D11/DirectComposition 原生显示；
+- 媒体不经过 iPhoneMirror 云端中转，USB 场景不依赖网络；
+- 干净的独立窗口可直接用于 OBS，截图直接读取解码帧，不包含软件 UI。
+- 可选 BLE HID 鼠标/键盘控制：配合 iOS 辅助触控，无需在手机安装 App 或越狱；
+
+## 界面预览
+
+![主界面与投屏设置](docs/images/user-guide/settings-workspace1.png)
+
+### 与常见投屏方案的区别
+
+| 对比维度 | iPhoneMirror | 常见通用方案 |
+|---|---|---|
+| 连接方式 | USB 与 AirPlay 统一 | 通常只提供一种连接，或分成两个程序 |
+| 设备外形 | 按 iPhone/iPad 机型族匹配圆角与曲线 | 统一圆角、矩形窗口或额外黑边 |
+| 多设备 | 独立会话、独立窗口、排序与同时投屏 | 多数围绕单设备切换设计 |
+| 有线兼容 | A 演示、B AirPlay 实验、C 爱思模式按设备选择 | 通常使用固定协议参数 |
+| OBS | 无 UI 的原生独立窗口 | 经常需要裁掉控制面板或捕获桌面 |
+| 驱动 | 独立管理器按设备检查、修复和卸载 | 驱动操作常混在主程序内，诊断信息较少 |
+| 数据路径 | 本机/局域网处理，无项目云端中继 | 部分方案要求登录、联网或云服务 |
+
+iPhoneMirror 的蓝牙控制受 iOS 辅助触控和 Windows 蓝牙外设模式限制，不能注入多指触控；
+项目也没有内建视频编辑器。Apple 私有协议和兼容 AirPlay 实现可能随未来 iOS 更新而需要适配。
+
+## 下载
+
+前往 [Releases](https://github.com/RayrenSX/iPhoneMirror/releases)，优先下载
+`iPhoneMirror-Setup-v*-x64.exe`。安装向导支持简体中文、繁体中文（香港）和 English，可选择安装目录，
+管理员安装默认到 `C:\Program Files\iPhoneMirror`，并创建开始菜单入口；桌面快捷方式为可选项。
+选择按当前用户安装时，Inno Setup 会使用 Windows 的用户级程序目录。
+需要免安装版本时，也可以下载 `iPhoneMirror-v*-win-x64.zip`，完整解压后运行
+`iPhoneMirror.exe`。若 Windows 对 ZIP 版无线 DLL 报“损坏的映像”或错误
+`0xc0e90002`，请改用 Setup；必须使用 ZIP 时，先在下载文件的“属性”中勾选
+“解除锁定”，再重新解压，不能只处理已解压出的单个 DLL。
+
+两种发布包都自带 .NET 运行时和独立的 `iPhoneMirror.Driver.exe` 驱动管理器，
+无需另装 .NET Desktop Runtime 或单独下载驱动工具。可使用同一 Release 中的
+`SHA256SUMS.txt` 验证下载文件完整性。
+
+程序默认在启动后后台检查 GitHub Release。发现更新时会显示版本、发布日期和 Markdown
+更新说明；点击“立即更新”即可下载、校验并启动覆盖安装，完成后自动重新打开程序。
+“关于”页面可手动检查更新，并可分别控制启动检查、自动下载和正式版/Beta 提醒；
+应用主题在主界面的“设置 → 应用设置”中设置。
+网络不可用或检查超时不会影响正常启动。
+
+完整操作说明见 [使用教程](docs/USER_GUIDE.md)。
+
+目标电脑需要 Apple USB 支持，通常来自以下任一 Apple 官方组件（缺失时驱动管理器可按上文流程获取）：
+
+- Microsoft Store 版 **Apple Devices**；或
+- 含 Apple Mobile Device Support 的 iTunes 桌面版。
+
+无线发现使用 Windows 10/11 自带的 DNS-SD，不安装 Bonjour 等系统服务，发现本身不需要管理员权限。
+安装版在管理员安装模式下会为无线宿主创建名为 `iPhoneMirror Wireless AirPlay` 的本地子网
+防火墙规则。规则按 `WirelessHost.exe` 和本地子网限定 TCP/UDP 入站，并允许 AirPlay
+`SETUP` 为每个会话动态协商的媒体端口；卸载时删除该规则。便携版不会自动改动防火墙，
+必要时请按[教程中的命令](docs/USER_GUIDE.md#在-iphoneipad-上连接)手动添加。
+
+## 能做什么
+
+| 功能 | 当前实现 |
+|---|---|
+| 有线投屏 | USB 直连；按设备选择演示、AirPlay 实验或爱思兼容模式 |
+| 无线投屏 | 本地网络 AirPlay，直接接入主预览和全部输出功能 |
+| 视频应用投屏 | AirPlay/DLNA HTTP(S)/HLS 播放、控制和媒体源音频 |
+| 视频 | CoreMedia/AVCC H.264、HEVC 描述解析和 Media Foundation 自动/硬件优先/软件兼容解码 |
+| 渲染 | D3D11/DirectComposition 原生预览，保留 BT.709 全范围色彩元数据 |
+| 音频 | USB 48 kHz PCM 与 AirPlay PCM，WASAPI 播放、静音与音量控制 |
+| 设备 | iPhone/iPad、UDID、ProductType、系统版本、信任状态、稳定多设备切换 |
+| 画面 | 原生/1080p/720p/540p 本地渲染上限，24/30/60/120 FPS 上限 |
+| 预览 | 主窗口、无标题独立窗口、全屏、横竖屏、等比例缩放、按型号匹配屏幕圆角 |
+| OBS | 独立窗口可直接使用 Window Capture，无重复的专用窗口入口 |
+| 蓝牙反向控制 | 按设备绑定 BLE HID 鼠标/键盘、系统导航和可配置全局快捷键 |
+| 画面调节 | 仅本地预览的亮度、对比度、饱和度和伽马 |
+| 工具 | 截图、强制刷新、快捷键、实时日志、简体中文、繁体中文（香港）和英文界面 |
+| 驱动 | 有线开始投屏前按当前设备严格检查；异常时打开独立驱动管理器 |
+
+分辨率和 FPS 选项只限制本地渲染，不会降低 USB 上传输的原始画面质量。
+
+有线设备默认使用 **A 演示模式（推荐）**：发送 `Valeria=true` 和原生 `DisplaySize`，完整镜像手机
+画面，但状态栏日期、时间和电量会显示 Apple 演示值。**B AirPlay（实验）** 使用
+原生尺寸和横竖屏自适应，允许视频 App 切换到外接播放，但可能裁切或显示不全。
+**C 爱思模式** 固定为 1565×1565，兼容性更可控，但会限制源画面清晰度。每种模式
+右侧的感叹号会显示完整优缺点；选择只作用于当前有线设备。
+
+## 快速开始
+
+1. 运行 Release 中的 Setup 安装程序并从开始菜单启动 iPhoneMirror；使用 ZIP 版时，
+   完整解压后运行 `iPhoneMirror.exe`。
+2. 使用数据线连接 iPhone 或 iPad，保持解锁，并在设备上选择“信任此电脑”。
+3. 点击左侧“驱动”，为目标设备执行一键安装；工具会按需补齐 Apple USB
+   支持和采集过滤驱动。
+4. 点击左侧“投屏来源”选择设备，再点击顶部“开始投屏”。如果当前有线设备的驱动缺失或异常，主程序
+   会取消本次启动并自动打开驱动管理器。
+
+切换到另一台设备时，程序会先向上一台设备发送 QuickTime 结束控制并恢复普通
+USB 配置；关闭主窗口也会执行同一清理流程。
+
+> [!WARNING]
+> 不要使用 Zadig 把 Apple 父设备替换为 WinUSB/libusb。iPhoneMirror 只在目标
+> Apple `usbccgp` 设备实例上检测 `libusb0` UpperFilter。主程序只携带启动所需的
+> `libusb0.dll` 用户态运行库，不会自行安装或启用内核过滤驱动。
+> 驱动变更请交给独立驱动工具完成。
+
+## 有线驱动管理
+
+`iPhoneMirror.exe` 只读取驱动状态，所有安装、修复和卸载均由同目录中的独立
+`iPhoneMirror.Driver.exe` 完成。主窗口左侧的“驱动”入口可以随时打开该工具；
+已经打开时会激活现有窗口，不会重复启动同一个成品路径。
+
+用户点击有线设备的“开始投屏”时，主程序会针对当前选择的设备检查：
+
+- Apple USB 父设备是否仍为 `usbccgp`；
+- 当前设备是否登记 `libusb0` UpperFilter；
+- `libusb0.sys` 文件和服务是否正常；
+- `libusb0` 是否能够按当前设备序列号完成精确枚举。
+
+任一检查失败都会停止本次有线投屏启动，并自动打开驱动管理器。修复完成并按提示
+重新插拔设备后，再回到主程序点击“开始投屏”。驱动管理器界面日志位于
+`%LOCALAPPDATA%\iPhoneMirror.Driver\Logs\driver-ui.log`，管理员操作日志位于
+`%ProgramData%\iPhoneMirror.Driver`。
+
+如果电脑完全没有 Apple USB 支持，驱动管理器会先使用同目录或缓存中的受信任
+`AppleMobileDeviceSupport64.msi`；没有本地包时从 Apple Software Update Catalog
+下载并验证独立 MSI，获取失败才从 Apple 官方 HTTPS 下载并验证桌面版 iTunes 安装包，
+再提取其中的 Apple Mobile Device Support。Microsoft Store 版 Apple Devices 仍可
+手动安装，项目不会重新分发 Apple 专有二进制文件。完整驱动依赖清单见
+[`docs/DRIVER_DEPENDENCIES.md`](docs/DRIVER_DEPENDENCIES.md)。
+
+## 诊断日志
+
+主程序会把托管界面与业务错误写入
+`%LOCALAPPDATA%\iPhoneMirror\Logs\application.log`，把 USB、解码和渲染核心日志写入
+同目录的 `capture.log`。启动失败会额外写入 `startup.log`；一键更新启动安装程序时会
+生成 `installer-update-时间.log`。如果 LocalAppData 暂时不可写，关键托管错误会回退到
+`%TEMP%\iPhoneMirror-fallback.log`。
+
+“关于 → 诊断”可以直接打开日志目录或立即清理日志和已下载的更新缓存。程序也会自动
+轮转日志，清理超过 14 天的旧文件，并将主日志目录总量限制在 64 MB。清理时正在使用的
+文件会安全跳过，不会中断投屏。
+
+> [!NOTE]
+> 以上自动检查只针对 USB 有线设备。无线 AirPlay 来源不会读取或要求 `libusb0`，
+> 也不会因为驱动状态自动打开驱动管理器。
+
+## 无线 AirPlay
+
+AirPlay 接收服务随主程序自动启动，不需要点击“开始投屏”才能被 iPhone 发现。
+未连接时，左侧不会显示一个空的 AirPlay 设备；连接成功后才创建无线设备卡片，
+并只在刚连接时自动切换一次。
+
+1. 将 Windows 电脑与 iPhone/iPad 连接到同一可信局域网。
+2. 点击左侧“设置”，在“无线 AirPlay”区域设置接收端名称和连接分辨率。
+3. 选择最高 5120×2880 60 fps、1080p 60 fps（默认）、720p 30 fps 或 540p 30 fps。
+4. 点击“应用”。名称和分辨率修改会在同一个统一弹窗中汇总。
+5. 在 iOS 控制中心打开“屏幕镜像”，选择设置好的接收端名称。
+6. 连接后可使用右上角“停止投屏”结束当前无线会话；接收服务继续常驻。
+
+无线选项卡不显示有线的本地分辨率/FPS 上限。无线清晰度需要在连接前通过 AirPlay
+广播规格声明；修改名称或规格会重启接收端，并断开当前所有无线会话，随后需要在手机上
+重新选择接收端。无线屏幕镜像仍可使用主预览、音量、截图、独立窗口、全屏、多窗口和 OBS。
+
+当前实现没有固定的无线设备数量上限；实际同时连接数量取决于 CPU/GPU、内存和局域网带宽。
+同一接收端也承载视频应用的 AirPlay/DLNA 投放；固定控制/发现端口为 RAOP `5001`、
+AirPlay `7001`、DLNA `8090` 和 SSDP `1900`，镜像和 RAOP 媒体端口由会话动态协商。
+若连接后黑屏约 10 秒再断开，通常是防火墙只放行了固定端口；请升级到包含此修复的安装包，或按教程将
+WirelessHost 进程的 TCP/UDP 入站端口设为 `Any`（仍限制在本地子网）。
+
+## AirPlay 音乐投放
+
+无需启动“屏幕镜像”，也可以只把 iPhone/iPad 的音乐通过 AirPlay 播放到 Windows：
+
+1. 保持电脑与 iPhone/iPad 位于同一可信局域网，并启动 iPhoneMirror。
+2. 在音乐 App 或控制中心“正在播放”面板中点击 AirPlay 音频按钮。
+3. 选择与屏幕镜像相同的接收端名称。
+4. 连接后程序会自动创建无线来源并播放 PCM 音频；可在主界面调节音量、静音或停止投放。
+
+纯音乐会话不传输视频。主预览会显示“AirPlay 音乐”状态，截图、独立预览和全屏等视频工具
+会暂时禁用；如果发送端随后开始屏幕镜像，视频到达后这些工具会自动恢复。
+
+## 视频应用投屏
+
+“视频应用投屏”与“无线 AirPlay 屏幕镜像”共用同一个网络接收端，避免 iOS 因设备身份、
+配对信息或服务端口不一致而隐藏设备。程序会按请求类型分流：屏幕镜像帧进入原预览，视频
+App 发送的播放地址进入主窗口内的专用播放界面，两条播放逻辑互不混用。
+
+1. 保持电脑和 iPhone/iPad 位于同一可信局域网，并启动 iPhoneMirror。
+2. 在支持 AirPlay 的视频 App 内点击投屏按钮。
+3. 在视频 App 中选择与“屏幕镜像”相同的 AirPlay 接收端；程序会按视频播放请求切换到主窗口内的专用播放界面，不会把它当作屏幕镜像。
+4. 关闭播放界面或在手机端停止投放即可结束，原有屏幕镜像会话不受影响。
+
+部分 App 使用 DRM、登录态或私有播放协议，可能不会向第三方接收端提供可播放地址。
+
+## 第三方依赖与许可证
+
+| 依赖 | 用途 | 许可证/来源 |
+|---|---|---|
+| .NET 10、WPF、Windows SDK | 主界面、Windows API 和发布运行时 | Microsoft 官方运行时 |
+| libusb 1.0.29 | 可选的 USB 传输兼容层 | LGPL-2.1-or-later，见 `third_party/libusb/` |
+| libusb-win32 1.2.6.0 | 独立驱动管理器的 `libusb0` 过滤驱动 | LGPL-3.0 及上游许可证，见 `src/DriverInstaller/Assets/` |
+| AirPlayServer 1.1.2 | 无线 AirPlay 接收、FairPlay/视频/音频解码 | GPL-3.0、LGPL-2.1-or-later 及上游许可证，见 `third_party/airplay-server/` |
+| FFmpeg 4.4.2 runtime | AirPlayServer 内置 H.264/音频运行库 | LGPL-2.1-or-later，随 AirPlayServer 发行物提供 |
+| FFmpeg 8.1.2 runtime | 录制、直播推流和视频投屏 HLS 桥接 | GPL-3.0，默认随 `tools/ffmpeg/` 发布 |
+| quicktime_video_hack fixtures | QuickTime 协议回归测试向量 | MIT，仅用于 `src/Core/tests/fixtures/` |
+
+Apple Devices、Apple Mobile Device Support、iTunes 和 Windows 系统组件均不是本项目
+重新分发的第三方软件。完整版权、来源、版本、哈希和许可证说明见
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) 与 AirPlayServer 的 `SOURCE.md`。
+
+## OBS
+
+1. 在 iPhoneMirror 中打开“独立窗口”。
+2. OBS → 来源 → 窗口采集。
+3. 选择标题包含 `iPhoneMirror` 和目标设备名称的独立窗口。
+4. Windows 11 推荐使用 Windows Graphics Capture。
+
+OBS 30.1+ 还可以通过“应用程序音频捕获”选择 `iPhoneMirror.exe`。更多说明见
+[OBS 输出文档](docs/OBS_OUTPUT.md)。
+
+## 快捷键
+
+| 快捷键 | 操作 |
+|---|---|
+| `F11` / `Esc` | 进入/退出全屏 |
+| `F5` | 刷新设备 |
+| `Ctrl+R` | 强制重绘 |
+| `Ctrl+Shift+P` | 打开独立预览 |
+| `Ctrl+L` | 显示/隐藏实时日志 |
+| `Ctrl+M` | 静音/恢复 |
+| `Ctrl+S` | 截图 |
+
+## 已验证设备
+
+| ProductType / iOS | 原生画面 | 真机结果 |
+|---|---:|---|
+| `iPhone18,3` / iOS 26.5.2 | 1206×2622 | 约 58.6 FPS，常规解码 3–5 ms，48 kHz 双声道 PCM |
+| `iPhone13,1` / iOS 18.7.8 | 1082×2340 | 约 58.9 FPS，常规解码 3–6 ms，48 kHz 双声道 PCM |
+
+这些结果仅表示上述实机组合已验证，不构成对所有 iPhone/iOS 版本的兼容性保证。
+
+## 从源码构建
+
+### GitHub Actions 与 USB 桥接器
+
+Windows 工作流使用 GitHub 托管的 `windows-latest` runner。构建时会自动拉取并构建
+[RayrenSX/iUsbBridge](https://github.com/RayrenSX/iUsbBridge)，不要求 runner 预先存在
+本地兄弟目录。若本地已有工作副本，可设置 `IPHONE_MIRROR_USB_BRIDGE_ROOT` 覆盖默认路径。
+
+Actions 失败时，在日志中搜索 `Cloning USB touch bridge`、`USB touch bridge build failed`
+或 `USB touch bridge runtime`，可分别定位下载、编译和运行时载荷校验阶段。
+如果失败发生在 `Set up MSYS2 UCRT64 for UxPlay` 且提示 `Operation too slow`，通常是
+MSYS2 镜像临时超时；工作流已关闭全量更新，只安装构建所需包，重新运行即可。
+
+要求：
+
+- Windows 10/11 x64
+- Visual Studio Build Tools（含 MSVC、Windows SDK、CMake）
+- .NET 10 SDK 与 Windows Desktop 工作负载
+- MSYS2 UCRT64：CMake、Ninja、UCRT64 工具链、GStreamer（base、good、bad、libav）、
+  libplist 和 OpenSSL，用于构建随包提供的 UxPlay 备用接收端
+
+```powershell
+git clone https://github.com/RayrenSX/iPhoneMirror.git
+cd iPhoneMirror
+./build.ps1 -Configuration Release
+```
+
+脚本会构建 C++20 核心、运行协议测试并发布自包含 WPF 应用：
+
+```text
+outputs/iPhoneMirror/iPhoneMirror.exe
+outputs/iPhoneMirror/iPhoneMirror.Driver.exe
+outputs/iPhoneMirror/iPhoneMirror.Core.dll
+outputs/iPhoneMirror/iPhoneMirror.VirtualCamera.dll
+outputs/iPhoneMirror/iPhoneMirror.VirtualCamera.Admin.exe
+outputs/iPhoneMirror/tools/ffmpeg/ffmpeg.exe
+outputs/iPhoneMirror/Wireless/iPhoneMirror.WirelessHost.exe
+outputs/iPhoneMirror/Wireless/UxPlay/iPhoneMirror.UxPlayHost.exe
+outputs/iPhoneMirror/Wireless/UxPlay/uxplay.exe
+```
+
+`outputs/iPhoneMirror` 是内置 .NET/WPF 依赖的单文件便携版。安装器使用
+`outputs/iPhoneMirror.Installer`，主程序和驱动管理器共享外置运行时 DLL，
+从而减少安装包下载体积。
+
+默认构建内置 FFmpeg 8.1.2 媒体输出运行时，录制及 RTMP/SRT/WHIP 推流可以
+开箱即用。仅在明确需要最小体积、并接受依赖系统 FFmpeg 时生成精简版：
+
+```powershell
+.\build.ps1 -Configuration Release -OmitMediaOutputRuntime
+```
+
+发布精简版资产时，同样向发布脚本传入 `-OmitMediaOutputRuntime`。
+
+生成完整 Release 资产（Setup、ZIP、SHA256 清单和 SBOM）：
+
+```powershell
+./scripts/package_release.ps1 -Version 1.8.3 -GenerateSbom
+```
+
+正式生成待上传资产时传入 `-UpdateReleaseManifest`，发布脚本会同步
+`updates/releases.json` 中对应版本的文件大小和 SHA256，确保 GitHub API
+不可用时备用更新源仍能完成校验。普通本地打包默认不修改在线发布清单。
+
+Inno Setup 6.7.3 及其简体中文、繁体中文翻译会按固定 SHA256 下载到 `work/tools`，无需全局安装。
+
+构建并运行完整测试，但不发布自包含应用：
+
+```powershell
+./build.ps1 -Configuration Debug -NoPublish
+```
+
+## 架构
+
+```text
+iPhone/iPad
+  ├─ USB / QuickTime ─► H.264 / PCM decode ─┐
+  └─ AirPlay ─► WirelessHost ─► I420 / PCM ─┤
+                                              └─► native session
+                                                   ├─► D3D11 main/detached/fullscreen preview
+                                                   ├─► screenshot
+                                                   ├─► WASAPI audio
+                                                   ├─► FFmpeg MP4 / RTMP / SRT / WHIP
+                                                   ├─► Windows 11 Virtual Camera
+                                                   └─► OBS Window Capture
+```
+
+- [协议说明](docs/PROTOCOL.md)
+- [软件架构](docs/ARCHITECTURE.md)
+- [D3D11 渲染](docs/D3D11_RENDERING.md)
+- [设备圆角配置](docs/DEVICE_CORNER_PROFILES.md)
+- [音频输出](docs/WASAPI_AUDIO.md)
+- [后续升级计划](docs/ROADMAP.md)
+
+## 当前限制
+
+- 内建录制与 RTMP、SRT、WebRTC/WHIP 推流在源音频和对应编码器可用时会同时输出画面和声音；音频或编码器暂不可用时仍可立即输出纯视频。MP4、RTMP 和 SRT 使用 AAC，WHIP 使用 Opus。
+- 主程序尚未商业签名。
+- 外部采集驱动的干净 Win10/Win11 安装矩阵仍需更广泛验证。
+- QuickTime Screen Capture 并非 Apple 公开、稳定的第三方 API。
+- AirPlay 兼容实现并非 Apple 官方接口，未来 iOS 更新可能需要适配。
+- 蓝牙反向控制依赖适配器的 BLE 外设模式和 iOS 辅助触控，只提供指针级单指操作。
+- 硬件解码是否可用取决于 Windows MFT、GPU 驱动和设备；不支持时会自动回退到软件解码，
+  预览仍使用 D3D11。
+- SDR 输出统一标记为 full-range BT.709；HDR 呈现和下游播放器效果取决于设备与显示器能力。
+
+## 参与项目
+
+提交问题前请阅读 [支持说明](SUPPORT.md)。开发贡献请阅读
+[CONTRIBUTING.md](CONTRIBUTING.md)，安全问题请使用仓库的
+[私密漏洞报告](https://github.com/RayrenSX/iPhoneMirror/security/advisories/new)，不要公开粘贴
+UDID、配对记录或完整 USB 抓包。
+
+## 许可与致谢
+
+iPhoneMirror 自有代码采用 [GNU General Public License v3.0 only](LICENSE)。分发修改版
+或衍生作品时必须遵守 GPLv3 的源码提供、版权声明和同许可证分发要求。随源码和发布包
+分发的第三方组件仍受各自许可证约束，详见
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+无线接收器作为独立 GPLv3 进程分发，通过命名管道向 GPLv3 主程序传递解码后的媒体帧。
+发布包的 `Wireless/licenses` 包含固定版本、源码链接、二进制哈希与完整许可文本。
+
+协议研究参考：
+
+- [danielpaulus/quicktime_video_hack](https://github.com/danielpaulus/quicktime_video_hack)
+- [chotgpt/quicktime_video_hack_windows](https://github.com/chotgpt/quicktime_video_hack_windows)
+
+Apple、iPhone、iOS、QuickTime 是 Apple Inc. 的商标。本项目与 Apple Inc. 无隶属、赞助
+或认可关系。

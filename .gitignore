@@ -1,0 +1,15 @@
+/build/
+/dist/
+/upstream/
+/capture-engine-*.zip
+/USBMirror-*.zip
+/SHA256SUMS.txt
+/.vs/
+*.obj
+*.res
+*.pdb
+*.ilk
+*.exe
+*.dll
+!/third_party/capture-engine/**/*.exe
+!/third_party/capture-engine/**/*.dll

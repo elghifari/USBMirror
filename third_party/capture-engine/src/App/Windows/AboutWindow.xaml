@@ -1,0 +1,189 @@
+<ui:FluentWindow x:Class="IPhoneMirror.App.Windows.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:animations="clr-namespace:IPhoneMirror.UI.Animations"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="{DynamicResource AboutTitle}"
+        Width="760" Height="600" MinWidth="700" MinHeight="520"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica" WindowCornerPreference="Round"
+        Background="{DynamicResource AppBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        AutomationProperties.AutomationId="AboutWindow">
+    <ui:FluentWindow.Resources>
+        <Style x:Key="AboutCheckUpdatesButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource PrimaryButton}">
+            <Setter Property="Foreground"
+                    Value="{DynamicResource AboutCheckUpdatesTextBrush}"/>
+        </Style>
+    </ui:FluentWindow.Resources>
+    <Grid Style="{StaticResource SubWindowPageRoot}"
+          animations:PageTransition.IsEnabled="True">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid Style="{StaticResource SubWindowHeader}"
+              animations:WindowDragBehavior.IsEnabled="True">
+            <StackPanel Margin="0,0,48,0">
+                <TextBlock Text="{DynamicResource AboutTitle}"
+                           Style="{StaticResource SubWindowTitle}"/>
+                <TextBlock Text="{DynamicResource AboutSubtitle}"
+                           Style="{StaticResource SubWindowSubtitle}"/>
+            </StackPanel>
+            <Button Style="{StaticResource SubWindowCloseButton}" Click="OnCloseClick">
+                <ui:SymbolIcon Style="{StaticResource ButtonSymbolIcon}" Symbol="Dismiss20" FontSize="18"/>
+            </Button>
+        </Grid>
+
+        <TabControl x:Name="AboutTabs" Grid.Row="2"
+                    Style="{StaticResource SubWindowTabControl}">
+            <TabItem Header="{DynamicResource AboutTitle}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="0,0,8,0">
+                    <StackPanel Margin="4,14,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="88"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Width="68" Height="68" CornerRadius="14"
+                                        HorizontalAlignment="Left"
+                                        Background="{DynamicResource PanelAltBrush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="1">
+                                    <Image Source="pack://application:,,,/Assets/iPhoneMirror.png"
+                                           Width="52" Height="52"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="iPhoneMirror"
+                                               Style="{StaticResource SubWindowTitle}"/>
+                                    <TextBlock Text="{Binding VersionText}"
+                                               Foreground="{DynamicResource MutedTextBrush}"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Margin="0,4,0,0"/>
+                                    <TextBlock Text="{DynamicResource AboutDescription}"
+                                               Style="{StaticResource SubWindowSubtitle}"
+                                               Margin="0,6,0,0"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <Border Height="1" Background="{DynamicResource BorderSoftBrush}"
+                                    Margin="0,20"/>
+                            <TextBlock Text="{DynamicResource UpdateStatusTitle}"
+                                       Style="{StaticResource SubWindowSectionTitle}"/>
+                            <TextBlock Text="{Binding UpdateStatus}"
+                                       Style="{StaticResource SubWindowSubtitle}"
+                                       Margin="0,6,0,14"/>
+                            <WrapPanel>
+                                <Button Content="{DynamicResource CheckForUpdates}"
+                                        Click="OnCheckUpdatesClick"
+                                        Style="{StaticResource AboutCheckUpdatesButtonStyle}"
+                                        MinWidth="138" Margin="0,0,8,8"/>
+                                <Button Content="GitHub" Click="OnGitHubClick"
+                                        MinWidth="96" Margin="0,0,8,8"/>
+                                <Button Content="{DynamicResource Changelog}"
+                                        Click="OnChangelogClick"
+                                        MinWidth="108" Margin="0,0,8,8"/>
+                                <Button Content="{DynamicResource LicenseInformation}"
+                                        Click="OnLicenseClick"
+                                        MinWidth="118" Margin="0,0,8,8"/>
+                            </WrapPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource UpdateSettingsTitle}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="0,0,8,0">
+                    <StackPanel Margin="4,14,0,0">
+                            <TextBlock Text="{DynamicResource UpdateSettingsTitle}"
+                                       Style="{StaticResource SubWindowSectionTitle}"/>
+                            <TextBlock Text="{DynamicResource UpdateSettingsDescription}"
+                                       Style="{StaticResource SubWindowSubtitle}"
+                                       Margin="0,6,0,18"/>
+                            <CheckBox Content="{DynamicResource CheckOnStartup}"
+                                      IsChecked="{Binding CheckOnStartup}" Margin="0,0,0,14"/>
+                            <CheckBox Content="{DynamicResource AutoDownloadUpdates}"
+                                      IsChecked="{Binding AutoDownload}" Margin="0,0,0,14"/>
+                            <CheckBox Content="{DynamicResource AllowUpdateMirrorFallback}"
+                                      IsChecked="{Binding AllowMirrorFallback}" Margin="0,0,0,14"
+                                      ToolTip="{DynamicResource AllowUpdateMirrorFallbackDescription}"/>
+                            <CheckBox Content="{DynamicResource NotifyStableReleases}"
+                                      IsChecked="{Binding NotifyStableReleases}" Margin="0,0,0,14"/>
+                            <CheckBox Content="{DynamicResource NotifyPrereleaseReleases}"
+                                      IsChecked="{Binding NotifyPrereleaseReleases}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource DiagnosticsTitle}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="0,0,8,0">
+                    <StackPanel Margin="4,14,0,0">
+                            <TextBlock Text="{DynamicResource DiagnosticsTitle}"
+                                       Style="{StaticResource SubWindowSectionTitle}"/>
+                            <TextBlock Text="{DynamicResource DiagnosticsDescription}"
+                                       Style="{StaticResource SubWindowSubtitle}"
+                                       Margin="0,6,0,18"/>
+                            <TextBlock Text="{DynamicResource DiagnosticsLocation}"
+                                       Style="{StaticResource SubWindowSectionTitle}"/>
+                            <TextBox Text="{Binding DiagnosticPath, Mode=OneWay}"
+                                     IsReadOnly="True" Margin="0,9,0,14"
+                                     Padding="10,7" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding DiagnosticStatus}"
+                                       Style="{StaticResource SubWindowSubtitle}"
+                                       Margin="0,0,0,14"/>
+                            <WrapPanel>
+                                <Button Content="{DynamicResource OpenLogs}"
+                                        Click="OnOpenLogsClick"
+                                        Style="{StaticResource PrimaryButton}"
+                                        MinWidth="126" Margin="0,0,8,8"/>
+                                <Button Content="{DynamicResource CleanLogs}"
+                                        Click="OnCleanLogsClick"
+                                        MinWidth="126" Margin="0,0,8,8"/>
+                            </WrapPanel>
+                            <Border Height="1" Background="{DynamicResource BorderSoftBrush}"
+                                    Margin="0,12,0,18"/>
+                            <Grid>
+                                <TextBlock Text="{DynamicResource LiveLogHeader}"
+                                           Style="{StaticResource SubWindowSectionTitle}"
+                                           VerticalAlignment="Center"/>
+                                <Button Content="{DynamicResource ClearView}"
+                                        Command="{Binding MainViewModel.ClearLogCommand}"
+                                        HorizontalAlignment="Right" Padding="10,5"
+                                        MinHeight="32" FontSize="11"/>
+                            </Grid>
+                            <TextBlock Text="{Binding MainViewModel.LogPathDisplay, Mode=OneWay}"
+                                       FontFamily="Consolas" FontSize="10"
+                                       Foreground="{DynamicResource MutedTextBrush}"
+                                       TextTrimming="CharacterEllipsis" Margin="0,10,0,7"/>
+                            <Border Background="{DynamicResource PreviewChromeBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1" CornerRadius="10"
+                                    ClipToBounds="True">
+                                <TextBox x:Name="LiveLogTextBox"
+                                         Text="{Binding MainViewModel.LogText, Mode=OneWay}"
+                                         IsReadOnly="True" FontFamily="Consolas" FontSize="10"
+                                         Foreground="{DynamicResource PreviewTextBrush}"
+                                         Background="Transparent" BorderThickness="0"
+                                         Height="180" Padding="10" TextWrapping="NoWrap"
+                                         SelectionBrush="{DynamicResource AccentBrush}"
+                                         SelectionOpacity="0.35"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Disabled"
+                                         TextChanged="OnLiveLogTextChanged"/>
+                            </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</ui:FluentWindow>

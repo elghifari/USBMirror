@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#define IDI_USB_MIRROR 101
+#define IDR_FILTER_TOOL 201
+#define IDR_FILTER_DRIVER 202
+#define IDR_FILTER_DLL64 203
+#define IDR_FILTER_DLL32 204
+#define IDR_APP_BUNDLE 301

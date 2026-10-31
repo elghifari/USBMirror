@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>iPhoneMirror.DriverInstaller.Tests</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\DriverInstaller\GlobalUsings.cs" Link="GlobalUsings.cs" />
+    <Compile Include="..\Shared\Networking\SegmentedHttpDownloader.cs" Link="Networking\SegmentedHttpDownloader.cs" />
+    <Compile Include="..\Shared\Security\ElevationPathLock.cs" Link="Security\ElevationPathLock.cs" />
+    <Compile Include="..\DriverInstaller\Models\DriverModels.cs" Link="DriverModels.cs" />
+    <Compile Include="..\DriverInstaller\Services\DriverConstants.cs" Link="DriverConstants.cs" />
+    <Compile Include="..\DriverInstaller\Services\DriverPayload.cs" Link="DriverPayload.cs" />
+    <Compile Include="..\DriverInstaller\Services\DriverLogger.cs" Link="DriverLogger.cs" />
+    <Compile Include="..\DriverInstaller\Services\DriverOperationClient.cs" Link="DriverOperationClient.cs" />
+    <Compile Include="..\DriverInstaller\Services\DriverLocalization.cs" Link="DriverLocalization.cs" />
+    <Compile Include="..\DriverInstaller\Services\DeviceCatalog.cs" Link="DeviceCatalog.cs" />
+    <Compile Include="..\DriverInstaller\Services\AppleDeviceMetadataReader.cs" Link="AppleDeviceMetadataReader.cs" />
+    <Compile Include="..\DriverInstaller\Services\AppleProductNames.cs" Link="AppleProductNames.cs" />
+    <Compile Include="..\DriverInstaller\Services\AppleSoftwareUpdateCatalog.cs" Link="AppleSoftwareUpdateCatalog.cs" />
+    <Compile Include="..\DriverInstaller\Services\AppleSupportInstaller.cs" Link="AppleSupportInstaller.cs" />
+    <Compile Include="..\DriverInstaller\Services\ElevatedDriverHost.cs" Link="ElevatedDriverHost.cs" />
+    <Compile Include="..\DriverInstaller\Services\DriverCleanupHost.cs" Link="DriverCleanupHost.cs" />
+    <EmbeddedResource Include="..\..\scripts\remove_selected_iphone_drivers.ps1"
+                      LogicalName="DriverCleanup.Script.ps1" />
+    <EmbeddedResource Include="..\DriverInstaller\Assets\libusb-win32-1.2.6.0\amd64\install-filter.exe"
+                      LogicalName="DriverPayload.amd64.install-filter.exe" />
+    <EmbeddedResource Include="..\DriverInstaller\Assets\libusb-win32-1.2.6.0\amd64\libusb0.sys"
+                      LogicalName="DriverPayload.amd64.libusb0.sys" />
+    <EmbeddedResource Include="..\DriverInstaller\Assets\libusb-win32-1.2.6.0\amd64\libusb0.dll"
+                      LogicalName="DriverPayload.amd64.libusb0.dll" />
+    <EmbeddedResource Include="..\DriverInstaller\Assets\libusb-win32-1.2.6.0\x86\libusb0_x86.dll"
+                      LogicalName="DriverPayload.x86.libusb0_x86.dll" />
+  </ItemGroup>
+</Project>

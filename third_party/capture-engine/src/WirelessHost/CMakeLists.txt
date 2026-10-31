@@ -1,0 +1,125 @@
+add_library(iPhoneMirror.DnsSdShim SHARED DnsSdShim.cpp DnsSdShim.def)
+target_compile_definitions(iPhoneMirror.DnsSdShim PRIVATE
+    UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
+    WINVER=0x0A00 _WIN32_WINNT=0x0A00)
+target_compile_options(iPhoneMirror.DnsSdShim PRIVATE
+    /W4 /permissive- /utf-8 /EHsc)
+target_link_libraries(iPhoneMirror.DnsSdShim PRIVATE dnsapi iphlpapi ws2_32)
+set_target_properties(iPhoneMirror.DnsSdShim PROPERTIES
+    PREFIX ""
+    OUTPUT_NAME "dnssd")
+
+add_executable(iPhoneMirror.WirelessHost WirelessHost.cpp DlnaRenderer.cpp)
+add_dependencies(iPhoneMirror.WirelessHost iPhoneMirror.DnsSdShim)
+target_link_libraries(iPhoneMirror.WirelessHost PRIVATE bcrypt ws2_32 winhttp)
+
+target_compile_definitions(iPhoneMirror.WirelessHost PRIVATE
+    UNICODE
+    _UNICODE
+    WIN32_LEAN_AND_MEAN
+    NOMINMAX
+)
+
+target_compile_options(iPhoneMirror.WirelessHost PRIVATE
+    /W4
+    /permissive-
+    /utf-8
+    /EHsc
+)
+
+set_target_properties(iPhoneMirror.WirelessHost PROPERTIES
+    OUTPUT_NAME "iPhoneMirror.WirelessHost"
+)
+
+foreach(runtime IN ITEMS
+    airplay2dll.dll
+    avcodec-58.dll
+    avutil-56.dll
+    swresample-3.dll
+    swscale-5.dll)
+    add_custom_command(TARGET iPhoneMirror.WirelessHost POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${PROJECT_SOURCE_DIR}/third_party/airplay-server/bin/x64/${runtime}
+            $<TARGET_FILE_DIR:iPhoneMirror.WirelessHost>/${runtime})
+endforeach()
+
+add_custom_command(TARGET iPhoneMirror.WirelessHost POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:iPhoneMirror.DnsSdShim>
+        $<TARGET_FILE_DIR:iPhoneMirror.WirelessHost>/dnssd.dll)
+
+install(TARGETS iPhoneMirror.WirelessHost iPhoneMirror.DnsSdShim
+    RUNTIME DESTINATION Wireless)
+
+if(IPHONEMIRROR_BUILD_TESTS)
+    add_executable(iPhoneMirror.DnsSdRegistrationPolicy.Tests
+        tests/DnsSdRegistrationPolicyTests.cpp)
+    target_include_directories(iPhoneMirror.DnsSdRegistrationPolicy.Tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(iPhoneMirror.DnsSdRegistrationPolicy.Tests PRIVATE
+        /W4 /permissive- /utf-8 /EHsc)
+    add_test(NAME DnsSdRegistrationPolicyTests
+        COMMAND iPhoneMirror.DnsSdRegistrationPolicy.Tests)
+
+    add_library(iPhoneMirror.WirelessHost.Stub SHARED
+        tests/WirelessHostStub.cpp
+        tests/WirelessHostStub.def)
+    set_target_properties(iPhoneMirror.WirelessHost.Stub PROPERTIES
+        PREFIX ""
+        OUTPUT_NAME "airplay2dll.stub")
+
+    add_executable(iPhoneMirror.WirelessHost.Smoke tests/WirelessHostSmoke.cpp)
+    target_include_directories(iPhoneMirror.WirelessHost.Smoke PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(iPhoneMirror.WirelessHost.Smoke PRIVATE
+        UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_options(iPhoneMirror.WirelessHost.Smoke PRIVATE
+        /W4 /permissive- /utf-8 /EHsc)
+    target_link_libraries(iPhoneMirror.WirelessHost.Smoke PRIVATE ws2_32 winhttp)
+    add_dependencies(iPhoneMirror.WirelessHost.Smoke
+        iPhoneMirror.WirelessHost iPhoneMirror.WirelessHost.Stub)
+    add_test(NAME WirelessHostSmoke COMMAND iPhoneMirror.WirelessHost.Smoke
+        $<TARGET_FILE:iPhoneMirror.WirelessHost>
+        $<TARGET_FILE:iPhoneMirror.WirelessHost.Stub>)
+    set_tests_properties(WirelessHostSmoke PROPERTIES TIMEOUT 20)
+    add_test(NAME WirelessHostRuntimePreflight COMMAND
+        $<TARGET_FILE:iPhoneMirror.WirelessHost>
+        --check-runtime --library $<TARGET_FILE:iPhoneMirror.WirelessHost.Stub>)
+    set_tests_properties(WirelessHostRuntimePreflight PROPERTIES TIMEOUT 10)
+
+    add_executable(iPhoneMirror.WirelessHost.PreflightSmoke
+        tests/WirelessHostPreflightSmoke.cpp)
+    target_compile_definitions(iPhoneMirror.WirelessHost.PreflightSmoke PRIVATE
+        UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_options(iPhoneMirror.WirelessHost.PreflightSmoke PRIVATE
+        /W4 /permissive- /utf-8 /EHsc)
+    add_dependencies(iPhoneMirror.WirelessHost.PreflightSmoke
+        iPhoneMirror.WirelessHost iPhoneMirror.WirelessHost.Stub)
+    add_test(NAME WirelessHostInvalidImagePreflight COMMAND
+        iPhoneMirror.WirelessHost.PreflightSmoke
+        $<TARGET_FILE:iPhoneMirror.WirelessHost>
+        $<TARGET_FILE:iPhoneMirror.WirelessHost.Stub>)
+    set_tests_properties(WirelessHostInvalidImagePreflight PROPERTIES TIMEOUT 10)
+
+    add_executable(iPhoneMirror.WirelessReceiver.ProtocolSmoke
+        tests/WirelessReceiverProtocolSmoke.cpp)
+    target_include_directories(iPhoneMirror.WirelessReceiver.ProtocolSmoke PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(iPhoneMirror.WirelessReceiver.ProtocolSmoke PRIVATE
+        UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_options(iPhoneMirror.WirelessReceiver.ProtocolSmoke PRIVATE
+        /W4 /permissive- /utf-8 /EHsc)
+    target_link_libraries(iPhoneMirror.WirelessReceiver.ProtocolSmoke PRIVATE
+        iphlpapi ws2_32)
+    add_dependencies(iPhoneMirror.WirelessReceiver.ProtocolSmoke
+        iPhoneMirror.WirelessHost)
+    add_test(NAME WirelessReceiverProtocolSmoke COMMAND
+        iPhoneMirror.WirelessReceiver.ProtocolSmoke
+        $<TARGET_FILE:iPhoneMirror.WirelessHost>)
+    set_tests_properties(WirelessReceiverProtocolSmoke PROPERTIES TIMEOUT 35)
+    add_test(NAME WirelessReceiverMediaRouteSmoke COMMAND
+        iPhoneMirror.WirelessReceiver.ProtocolSmoke
+        $<TARGET_FILE:iPhoneMirror.WirelessHost> --media-route)
+    set_tests_properties(WirelessReceiverMediaRouteSmoke PROPERTIES
+        SKIP_RETURN_CODE 77 TIMEOUT 35)
+endif()

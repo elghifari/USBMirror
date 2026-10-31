@@ -1,0 +1,103 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AssemblyName>iPhoneMirror.Driver</AssemblyName>
+    <RootNamespace>IPhoneMirror.DriverInstaller</RootNamespace>
+    <Version>1.8.3</Version>
+    <AssemblyVersion>1.8.3.0</AssemblyVersion>
+    <FileVersion>1.8.3.0</FileVersion>
+    <Authors>RayrenSX</Authors>
+    <Product>iPhoneMirror Driver Manager</Product>
+    <Description>Standalone Apple USB and per-device capture driver manager for iPhoneMirror.</Description>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/RayrenSX/iPhoneMirror</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\App\Assets\iPhoneMirror.ico</ApplicationIcon>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <DebugType>embedded</DebugType>
+    <SatelliteResourceLanguages>en;zh-Hans;zh-Hant</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+    <Compile Include="..\Shared\Networking\SegmentedHttpDownloader.cs"
+             Link="Networking\SegmentedHttpDownloader.cs" />
+    <Compile Include="..\Shared\Security\ElevationPathLock.cs"
+             Link="Security\ElevationPathLock.cs" />
+    <Compile Include="..\SharedUI\Services\WindowWorkAreaController.cs"
+             Link="Services\WindowWorkAreaController.cs" />
+    <Compile Include="..\SharedUI\Animations\PageTransition.cs"
+             Link="Animations\PageTransition.cs" />
+    <Compile Include="..\SharedUI\Controls\ModernButton.cs"
+             Link="Controls\ModernButton.cs" />
+    <Compile Include="..\SharedUI\Controls\ModernCard.cs"
+             Link="Controls\ModernCard.cs" />
+    <Compile Include="..\SharedUI\Controls\ModernDialog.cs"
+             Link="Controls\ModernDialog.cs" />
+    <Page Include="..\SharedUI\Themes\LightTheme.xaml"
+          Link="Themes\LightTheme.xaml" />
+    <Page Include="..\SharedUI\Themes\DarkTheme.xaml"
+          Link="Themes\DarkTheme.xaml" />
+    <Page Include="..\SharedUI\Animations\ModernAnimations.xaml"
+          Link="Animations\ModernAnimations.xaml" />
+    <Page Include="..\SharedUI\Controls\ModernControls.xaml"
+          Link="Controls\ModernControls.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="..\App\Assets\iPhoneMirror.ico">
+      <Link>Assets\iPhoneMirror.ico</Link>
+    </Resource>
+    <Content Include="..\..\THIRD_PARTY_NOTICES.md">
+      <Link>THIRD_PARTY_NOTICES.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <EmbeddedResource Include="..\..\scripts\remove_selected_iphone_drivers.ps1"
+                      LogicalName="DriverCleanup.Script.ps1" />
+    <Content Include="$(NuGetPackageRoot)wpf-ui\4.3.0\LICENSE.md"
+             Condition="Exists('$(NuGetPackageRoot)wpf-ui\4.3.0\LICENSE.md')">
+      <Link>licenses\WPF-UI-LICENSE.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Include="$(NuGetPackageRoot)wpf-ui\4.3.0\ThirdPartyNotices.txt"
+             Condition="Exists('$(NuGetPackageRoot)wpf-ui\4.3.0\ThirdPartyNotices.txt')">
+      <Link>licenses\WPF-UI-ThirdPartyNotices.txt</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <EmbeddedResource Include="Assets\libusb-win32-1.2.6.0\amd64\install-filter.exe"
+                      LogicalName="DriverPayload.amd64.install-filter.exe" />
+    <EmbeddedResource Include="Assets\libusb-win32-1.2.6.0\amd64\libusb0.sys"
+                      LogicalName="DriverPayload.amd64.libusb0.sys" />
+    <EmbeddedResource Include="Assets\libusb-win32-1.2.6.0\amd64\libusb0.dll"
+                      LogicalName="DriverPayload.amd64.libusb0.dll" />
+    <EmbeddedResource Include="Assets\libusb-win32-1.2.6.0\x86\libusb0_x86.dll"
+                      LogicalName="DriverPayload.x86.libusb0_x86.dll" />
+    <EmbeddedResource Include="Assets\libusb-win32-1.2.6.0\AUTHORS.txt"
+                      LogicalName="DriverPayload.licenses.AUTHORS.txt" />
+    <EmbeddedResource Include="Assets\libusb-win32-1.2.6.0\COPYING_GPL.txt"
+                      LogicalName="DriverPayload.licenses.COPYING_GPL.txt" />
+    <EmbeddedResource Include="Assets\libusb-win32-1.2.6.0\COPYING_LGPL.txt"
+                      LogicalName="DriverPayload.licenses.COPYING_LGPL.txt" />
+    <EmbeddedResource Include="Assets\libusb-win32-1.2.6.0\README.txt"
+                      LogicalName="DriverPayload.licenses.README.txt" />
+    <EmbeddedResource Include="Assets\libusb-win32-1.2.6.0\libusb-win32-src-1.2.6.0.zip"
+                      LogicalName="DriverPayload.source.libusb-win32-src-1.2.6.0.zip" />
+  </ItemGroup>
+</Project>

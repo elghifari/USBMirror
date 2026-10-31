@@ -1,0 +1,323 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using Microsoft.Win32;
+using IPhoneMirror.DriverInstaller.Models;
+
+namespace IPhoneMirror.DriverInstaller.Services;
+
+internal sealed class DeviceCatalog
+{
+    private const string AppleVendorPrefix = "VID_05AC&PID_";
+    private const uint CrSuccess = 0;
+    private const uint DevNodePresent = 0x00000008;
+
+    internal IReadOnlyList<AppleDeviceRecord> GetAppleDevices(bool includeMetadata = true)
+    {
+        var timer = Stopwatch.StartNew();
+        var devices = new List<AppleDeviceRecord>();
+        var metadata = includeMetadata
+            ? AppleDeviceMetadataReader.TryReadAll()
+            : new Dictionary<string, AppleDeviceMetadata>(StringComparer.OrdinalIgnoreCase);
+        using var usb = Registry.LocalMachine.OpenSubKey(
+            @"SYSTEM\CurrentControlSet\Enum\USB", writable: false);
+        if (usb is null)
+        {
+            DriverLogger.WriteWarning("device-catalog", "usb_registry_unavailable",
+                ("include_metadata", includeMetadata), ("elapsed_ms", timer.ElapsedMilliseconds));
+            return devices;
+        }
+
+        foreach (var hardwareName in usb.GetSubKeyNames()
+                     .Where(name => name.StartsWith(AppleVendorPrefix,
+                         StringComparison.OrdinalIgnoreCase) &&
+                                    !name.Contains("&MI_", StringComparison.OrdinalIgnoreCase)))
+        {
+            using var hardware = usb.OpenSubKey(hardwareName, writable: false);
+            if (hardware is null) continue;
+            foreach (var instanceName in hardware.GetSubKeyNames())
+            {
+                var instanceId = $@"USB\{hardwareName}\{instanceName}";
+                if (!DriverConstants.IsAppleMobileCaptureParent(instanceId)) continue;
+                using var instance = hardware.OpenSubKey(instanceName, writable: false);
+                if (instance is null) continue;
+
+                var service = instance.GetValue("Service") as string ?? string.Empty;
+                var filters = ReadMultiString(instance, "UpperFilters");
+                var serial = DriverConstants.NormalizeSerial(instanceName);
+                metadata.TryGetValue(serial, out var deviceMetadata);
+                var productType = deviceMetadata?.ProductType ??
+                                  ResolveProductType(ReadMultiString(instance, "HardwareID"));
+                var modelName = AppleProductNames.Resolve(productType);
+                var displayName = ResolveDisplayName(
+                    instance.GetValue("FriendlyName") as string ??
+                    instance.GetValue("DeviceDesc") as string, instanceName);
+                devices.Add(new AppleDeviceRecord(instanceId, serial, displayName,
+                    productType, modelName, deviceMetadata?.DeviceName ?? string.Empty,
+                    deviceMetadata?.OsVersion ?? string.Empty, 0, service,
+                    IsDevicePresent(instanceId),
+                    filters.Contains("libusb0", StringComparer.OrdinalIgnoreCase), filters));
+            }
+        }
+
+        var result = devices
+            .OrderByDescending(device => device.IsPresent)
+            .ThenBy(device => device.ModelName, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(device => device.Serial, StringComparer.OrdinalIgnoreCase)
+            .Select((device, index) => device with { DeviceNumber = index + 1 })
+            .ToArray();
+        DriverLogger.WriteEvent("device-catalog", "enumeration_completed",
+            ("include_metadata", includeMetadata), ("count", result.Length),
+            ("connected", result.Count(device => device.IsPresent)),
+            ("metadata_count", metadata.Count), ("elapsed_ms", timer.ElapsedMilliseconds));
+        return result;
+    }
+
+    internal AppleDeviceRecord? FindExact(string instanceId, string serial) =>
+        GetAppleDevices(includeMetadata: false).FirstOrDefault(device =>
+            string.Equals(device.InstanceId, instanceId, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(device.Serial, DriverConstants.NormalizeSerial(serial),
+                StringComparison.OrdinalIgnoreCase));
+
+    internal AppleSupportStatus InspectAppleSupport(bool writeLog = true)
+    {
+        string? installedService = null;
+        var serviceRunning = false;
+        foreach (var serviceName in new[]
+                 {
+                     "Apple Mobile Device Service", "AppleMobileDeviceService",
+                 })
+        {
+            if (!TryQueryService(serviceName, out serviceRunning)) continue;
+            installedService = serviceName;
+            break;
+        }
+
+        var driverInf = FindAppleUsbDriverPackage();
+        var serviceInstalled = installedService is not null;
+        var driverInstalled = driverInf is not null;
+        var diagnosticKey = ResolveAppleSupportDiagnosticKey(serviceInstalled,
+            serviceRunning, driverInstalled);
+        var result = new AppleSupportStatus(serviceInstalled, serviceRunning,
+            installedService, driverInstalled, driverInf,
+            DriverLocalization.Get(diagnosticKey));
+        var fields = new (string Key, object? Value)[]
+        {
+            ("service_installed", result.ServiceInstalled),
+            ("service_running", result.ServiceRunning),
+            ("service", result.ServiceName),
+            ("usb_driver_installed", result.UsbDriverInstalled),
+            ("usb_driver_inf", result.UsbDriverInf),
+        };
+        if (writeLog)
+        {
+            if (result.Ready)
+                DriverLogger.WriteEvent("device-catalog", "apple_support_status", fields);
+            else
+                DriverLogger.WriteWarning("device-catalog", "apple_support_status", fields);
+        }
+        return result;
+    }
+
+    internal static string ResolveAppleSupportDiagnosticKey(bool serviceInstalled,
+        bool serviceRunning, bool driverInstalled) =>
+        !driverInstalled ? serviceInstalled ? "AppleUsbDriverMissing" : "AppleSupportMissing" :
+        !serviceInstalled ? "AppleServiceMissing" :
+        serviceRunning ? "AppleServiceRunning" : "AppleServiceStopped";
+
+    internal static string? FindAppleUsbDriverPackage(string? driverStoreRoot = null,
+        string? legacyDriverDirectory = null)
+    {
+        driverStoreRoot ??= Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            "System32", "DriverStore", "FileRepository");
+
+        // Apple Devices uses appleusb.inf. Desktop iTunes releases use
+        // usbaapl64.inf (or usbaapl.inf on older packages).
+        var infNames = new[] { "appleusb.inf", "usbaapl64.inf", "usbaapl.inf" };
+        if (Directory.Exists(driverStoreRoot))
+        {
+            foreach (var infName in infNames)
+            {
+                try
+                {
+                    foreach (var directory in Directory.EnumerateDirectories(driverStoreRoot,
+                                 infName + "_*", SearchOption.TopDirectoryOnly))
+                    {
+                        if (File.Exists(Path.Combine(directory, infName))) return infName;
+                    }
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    DriverLogger.WriteException("device-catalog",
+                        "apple_driver_store_inspection_failed", error,
+                        ("driver_inf", infName));
+                }
+            }
+        }
+
+        legacyDriverDirectory ??= Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "Common Files", "Apple", "Mobile Device Support", "Drivers");
+        foreach (var infName in infNames)
+        {
+            if (File.Exists(Path.Combine(legacyDriverDirectory, infName)))
+            {
+                DriverLogger.WriteEvent("device-catalog", "apple_driver_directory_detected",
+                    ("driver_inf", infName));
+                return infName;
+            }
+        }
+        return null;
+    }
+
+    internal LibUsbStackStatus InspectLibUsbStack()
+    {
+        try
+        {
+            using var service = Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Services\libusb0", writable: false);
+            var installed = service is not null;
+            var driverPath = Path.Combine(Environment.SystemDirectory, "drivers", "libusb0.sys");
+            var dll64Path = Path.Combine(Environment.SystemDirectory, "libusb0.dll");
+            var dll32Path = Path.Combine(Path.GetDirectoryName(Environment.SystemDirectory)!,
+                "SysWOW64", "libusb0.dll");
+            var driverMatch = HashMatches(driverPath, DriverConstants.DriverHash);
+            var dll64Match = HashMatches(dll64Path, DriverConstants.Dll64Hash);
+            var dll32Match = HashMatches(dll32Path, DriverConstants.Dll32Hash);
+            var filesMatch = driverMatch && dll64Match && dll32Match;
+            DriverLogger.WriteEvent("device-catalog", "libusb_hash_status",
+                ("driver", driverMatch), ("dll64", dll64Match), ("dll32", dll32Match),
+                ("expected_driver", DriverLogger.HashTag(DriverConstants.DriverHash)),
+                ("expected_dll64", DriverLogger.HashTag(DriverConstants.Dll64Hash)),
+                ("expected_dll32", DriverLogger.HashTag(DriverConstants.Dll32Hash)));
+            var version = File.Exists(driverPath)
+                ? FileVersionInfo.GetVersionInfo(driverPath).FileVersion
+                : null;
+            var running = installed && TryQueryService("libusb0", out var serviceRunning) &&
+                          serviceRunning;
+            var diagnostic = !installed ? DriverLocalization.Get("LibUsbMissing") :
+                !filesMatch ? DriverLocalization.Get("LibUsbFilesMismatch") :
+                running ? DriverLocalization.Format("LibUsbRunning", version ?? DriverLocalization.Get("UnknownVersion")) :
+                DriverLocalization.Get("LibUsbReadyOnConnect");
+            var result = new LibUsbStackStatus(installed, running, filesMatch, version, diagnostic);
+            DriverLogger.WriteEvent("device-catalog", "libusb_status",
+                ("installed", installed), ("running", running), ("files_match", filesMatch),
+                ("version", version));
+            return result;
+        }
+        catch (Exception error)
+        {
+            DriverLogger.WriteException("device-catalog", "libusb_inspection_failed", error);
+            return new LibUsbStackStatus(false, false, false, null,
+                DriverLocalization.Get("LibUsbCheckFailed") + DriverLogger.Sanitize(error.Message));
+        }
+    }
+
+    internal static string[] ReadMultiString(RegistryKey key, string name) =>
+        key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) switch
+        {
+            string[] values => values.Where(value => !string.IsNullOrWhiteSpace(value)).ToArray(),
+            string value when !string.IsNullOrWhiteSpace(value) => [value],
+            _ => [],
+        };
+
+    private static bool HashMatches(string path, string expected)
+    {
+        if (!File.Exists(path)) return false;
+        using var stream = File.OpenRead(path);
+        return string.Equals(Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(stream)), expected,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ResolveDisplayName(string? raw, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return DriverLocalization.Get("AppleMobileDevice");
+        var separator = raw.LastIndexOf(';');
+        var value = separator >= 0 && separator + 1 < raw.Length
+            ? raw[(separator + 1)..]
+            : raw;
+        return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    }
+
+    private static string ResolveProductType(IEnumerable<string> hardwareIds)
+    {
+        foreach (var hardwareId in hardwareIds)
+        {
+            const string marker = "&REV_";
+            var index = hardwareId.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (index < 0 || index + marker.Length + 4 > hardwareId.Length) continue;
+            var revision = hardwareId.Substring(index + marker.Length, 4);
+            if (!revision.All(char.IsAsciiDigit)) continue;
+            var major = int.Parse(revision[..2], System.Globalization.CultureInfo.InvariantCulture);
+            var minor = int.Parse(revision[2..], System.Globalization.CultureInfo.InvariantCulture);
+            if (major is <= 0 or > 99 || minor is < 0 or > 99) continue;
+            return $"iPhone{major},{minor}";
+        }
+        return string.Empty;
+    }
+
+    private static bool IsDevicePresent(string instanceId) =>
+        CM_Locate_DevNodeW(out var node, instanceId, 0) == CrSuccess &&
+        CM_Get_DevNode_Status(out var status, out var problem, node, 0) == CrSuccess &&
+        problem == 0 && (status & DevNodePresent) != 0;
+
+    private static bool TryQueryService(string name, out bool running)
+    {
+        const uint scManagerConnect = 0x0001;
+        const uint serviceQueryStatus = 0x0004;
+        const uint serviceRunning = 0x00000004;
+        running = false;
+        var manager = OpenSCManager(null, null, scManagerConnect);
+        if (manager == 0) return false;
+        try
+        {
+            var service = OpenService(manager, name, serviceQueryStatus);
+            if (service == 0) return false;
+            try
+            {
+                if (!QueryServiceStatus(service, out var status)) return true;
+                running = status.CurrentState == serviceRunning;
+                return true;
+            }
+            finally { CloseServiceHandle(service); }
+        }
+        finally { CloseServiceHandle(manager); }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ServiceStatus
+    {
+        internal uint ServiceType;
+        internal uint CurrentState;
+        internal uint ControlsAccepted;
+        internal uint Win32ExitCode;
+        internal uint ServiceSpecificExitCode;
+        internal uint CheckPoint;
+        internal uint WaitHint;
+    }
+
+    [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)]
+    private static extern uint CM_Locate_DevNodeW(out uint deviceNode,
+        string deviceId, uint flags);
+
+    [DllImport("cfgmgr32.dll")]
+    private static extern uint CM_Get_DevNode_Status(out uint status,
+        out uint problemNumber, uint deviceNode, uint flags);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern nint OpenSCManager(string? machineName, string? databaseName,
+        uint desiredAccess);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern nint OpenService(nint serviceManager, string serviceName,
+        uint desiredAccess);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool QueryServiceStatus(nint service, out ServiceStatus status);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseServiceHandle(nint handle);
+}
