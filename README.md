@@ -4,6 +4,50 @@ A native Windows app for mirroring an iPhone or iPad over USB. It provides a
 rectangular capture window, Windows audio playback, saved settings, automatic
 reconnection and optional virtual-camera output.
 
+## First-time setup
+
+USB Mirror requires Apple's Windows device support. If USB Mirror already
+connects to your phone, skip these steps. Otherwise, install that support
+through the Apple Devices app. If your phone already appears in Apple
+Devices, you can skip reinstalling it.
+
+1. Install [Apple Devices from the Microsoft Store](https://apps.microsoft.com/detail/9NP83LWLPZ9K).
+   You can also open its Store page from USB Mirror through
+   **Tools > Driver setup > Get Apple Devices**.
+2. Open Apple Devices. Connect your iPhone or iPad with a USB cable that
+   supports data, unlock the device, and tap **Trust** if prompted. Enter
+   your device passcode when asked.
+3. Wait for the device to appear in the Apple Devices sidebar. This confirms
+   that Windows can communicate with it. Close Apple Devices and any other
+   mirroring app before starting capture.
+4. Download the Windows x64 EXE from [Releases](https://github.com/elghifari/USBMirror/releases)
+   and run it. Select your phone in USB Mirror and click **Connect**.
+5. Capture the **USB Mirror Preview** window in your streaming app. Capture
+   USB Mirror's application audio or its Windows output device once to avoid
+   doubled audio.
+
+If Apple Devices cannot see the phone, try another data cable or USB port
+and follow [Apple's connection troubleshooting](https://support.apple.com/en-us/108643).
+
+### Capture-filter setup
+
+The bundled driver tool manages an additional USB capture filter. It does
+not install Apple's device support.
+
+If **Tools > Driver setup** reports **Capture filter missing** for your
+connected phone:
+
+1. Stop mirroring and select the phone in Driver setup.
+2. Choose **Install / repair filter**, confirm the operation, and approve
+   Windows' administrator prompt.
+3. Unplug and reconnect the USB cable. Return to USB Mirror, refresh the
+   device list, and connect again.
+
+Driver installation/removal and rollback have not yet been tested end to
+end in this build. See [VALIDATION.md](VALIDATION.md) for the current scope.
+
+## App details
+
 Version 0.4.1 uses a dark native interface, flat controls, section separators,
 plain connection status and an audio level bar. It omits the header slogan and
 idle footer instructions. Themed controls retain native keyboard and accessibility
