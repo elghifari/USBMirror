@@ -1,4 +1,29 @@
-# Validation - USB Mirror 0.4.1
+# Validation - USB Mirror
+
+## 0.4.2 preview rotation
+
+Prepared on 2026-11-03. This build compiles the capture engine from its
+vendored source, enabling quarter-turn preview rotations. The USB driver
+payloads and other baseline runtime components remain unchanged.
+
+- The three selected upstream suites pass: CoreProtocolTests,
+  OutputModeStateTests and UsbConfigurationRestorePolicyTests.
+- A real D3D11 preview renders a four-quadrant NV12 test image at 0, 90,
+  180 and 270 degrees. Desktop pixel samples match the expected quadrant
+  order in all four cases, and BMP fixtures were saved for visual inspection.
+- The frontend/runtime passes 32 checks, including left/right wraparound,
+  swapped display dimensions, persisted rotation and legacy-settings defaults.
+  The driver manager passes 25 checks; the bundle format passes 17 checks.
+- Offline, streaming, waiting and rotation UI fixtures keep all 31 controls
+  inside the client area. Ten rotation checks exercise preview-menu commands,
+  all four orientations, reset, and Ctrl+Left/Ctrl+Right/Ctrl+0. The real
+  settings file remains unchanged by these fixtures.
+- The user verified the patched 0.4.2 build with the landscape game: after
+  Rotate left, the picture was upright, the preview window became landscape,
+  and audio continued working. The rotation preference is saved. A physical
+  reconnect with the saved rotation has not yet been live-tested.
+
+## Previous validation: 0.4.1
 
 Release prepared on 2026-10-31 using the x64 MSVC 2019 toolchain and the user's known-working
 v1.8.3 USB capture/runtime binaries. No changes were made to the

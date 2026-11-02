@@ -683,8 +683,9 @@ void WirelessReceiverHub::start(std::wstring receiver_name, std::wstring host_pa
         anonymous_label(receiver_name_), width, height, frame_rate,
         narrow(std::filesystem::path(host_path_).filename().wstring())));
     worker_ = std::jthread([this](std::stop_token token) { run(token); });
-    playback_worker_ = std::jthread(
-        [this](std::stop_token token) { run_playback_writer(token); });
+    playback_stop_ = std::stop_source{};
+    playback_worker_ = std::thread(
+        [this, token = playback_stop_.get_token()] { run_playback_writer(token); });
 }
 
 void WirelessReceiverHub::stop() noexcept {
@@ -698,7 +699,7 @@ void WirelessReceiverHub::stop_locked() noexcept {
     ready_.store(false, std::memory_order_release);
     if (stop_event_) SetEvent(as_handle(stop_event_));
     if (playback_worker_.joinable()) {
-        playback_worker_.request_stop();
+        playback_stop_.request_stop();
         CancelSynchronousIo(playback_worker_.native_handle());
     }
     playback_condition_.notify_all();

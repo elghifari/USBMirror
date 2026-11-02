@@ -166,7 +166,8 @@ private:
     std::wstring pipe_name_;
     std::wstring stop_event_name_;
     std::jthread worker_;
-    std::jthread playback_worker_;
+    std::thread playback_worker_;
+    std::stop_source playback_stop_;
     void* pipe_{};
     void* stop_event_{};
     void* process_{};

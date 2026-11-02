@@ -21,6 +21,12 @@ inline bool valid_fps(unsigned fps) noexcept {
     return fps == 0 || fps == 30 || fps == 60 || fps == 120;
 }
 struct Size { unsigned width; unsigned height; };
+inline unsigned rotate_quarters(unsigned rotation, int delta) noexcept {
+    return static_cast<unsigned>((static_cast<int>(rotation % 4) + delta % 4 + 4) % 4);
+}
+inline Size rotated_size(unsigned width, unsigned height, unsigned rotation) noexcept {
+    return rotation % 2 ? Size{height, width} : Size{width, height};
+}
 inline Size fit(unsigned width, unsigned height, unsigned max_width, unsigned max_height) noexcept {
     if (!width || !height || !max_width || !max_height) return {0, 0};
     const double scale = std::min(1.0, std::min(double(max_width) / width, double(max_height) / height));

@@ -20,6 +20,9 @@ if (-not (Test-Path -LiteralPath $taskCore)) { throw 'The supplied folder does n
 if ((Get-Item -LiteralPath $taskCore).VersionInfo.FileVersion -ne '1.8.3.0') {
     throw 'This frontend targets the working v1.8.3 capture DLL. Supply that exact baseline.'
 }
+& (Join-Path $taskRoot 'build-core.ps1') -SkipTests:$SkipTests
+$taskBuiltCore = Join-Path $taskBuild 'capture-engine\src\Core\iPhoneMirror.Core.dll'
+if (-not (Test-Path -LiteralPath $taskBuiltCore)) { throw 'The rebuilt capture engine is missing.' }
 foreach ($taskDirectory in @($taskOutput, $taskSingle, $taskBuild, $taskVendor, (Join-Path $taskOutput 'licenses'))) {
     New-Item -ItemType Directory -Path $taskDirectory -Force | Out-Null
 }
@@ -33,12 +36,13 @@ $taskRuntimeFiles = @(
 )
 $taskManifest = @()
 foreach ($taskName in $taskRuntimeFiles) {
-    $taskSource = Join-Path $taskOriginal $taskName
+    $taskSource = if ($taskName -eq 'iPhoneMirror.Core.dll') { $taskBuiltCore } else { Join-Path $taskOriginal $taskName }
     if (-not (Test-Path -LiteralPath $taskSource)) { throw "Required baseline component is missing: $taskName" }
     $taskPackagedName = if ($taskName -eq 'iPhoneMirror.VirtualCamera.Admin.exe') { 'USBMirror.CameraSetup.exe' } else { $taskName }
     Copy-Item -LiteralPath $taskSource -Destination (Join-Path $taskOutput $taskPackagedName) -Force
     if ($taskPackagedName -ne $taskName -and (Test-Path -LiteralPath (Join-Path $taskOutput $taskName))) { Remove-Item -LiteralPath (Join-Path $taskOutput $taskName) -Force }
-    $taskManifest += [pscustomobject]@{File=$taskPackagedName; SourceFile=$taskName; SHA256=(Get-FileHash -LiteralPath $taskSource -Algorithm SHA256).Hash; Bytes=(Get-Item -LiteralPath $taskSource).Length}
+    $taskKind = if ($taskName -eq 'iPhoneMirror.Core.dll') { 'VendoredSourceBuild' } else { 'BaselineBinary' }
+    $taskManifest += [pscustomobject]@{File=$taskPackagedName; SourceFile=$taskName; SourceKind=$taskKind; SHA256=(Get-FileHash -LiteralPath $taskSource -Algorithm SHA256).Hash; Bytes=(Get-Item -LiteralPath $taskSource).Length}
 }
 Copy-Item -LiteralPath (Join-Path $taskUpstream 'LICENSE') -Destination (Join-Path $taskOutput 'LICENSE') -Force
 Copy-Item -LiteralPath (Join-Path $taskUpstream 'THIRD_PARTY_NOTICES.md') -Destination (Join-Path $taskOutput 'licenses\upstream-notices.md') -Force

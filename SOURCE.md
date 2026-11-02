@@ -1,21 +1,25 @@
 # Source and baseline
 
 USB Mirror is a new native Win32 frontend licensed under GPL-3.0-only. It uses
-the unmodified native capture engine, USB configuration helper, and optional
-virtual-camera component from the user's working iPhoneMirror v1.8.3 install.
+a native capture engine based on the iPhoneMirror v1.8.3 source. The USB
+configuration helper, USB libraries and optional virtual-camera component
+come unchanged from the user's working v1.8.3 install.
 
 - Upstream: https://github.com/RayrenSX/iPhoneMirror
 - Source tag: https://github.com/RayrenSX/iPhoneMirror/tree/v1.8.3
 - Tagged source archive: https://codeload.github.com/RayrenSX/iPhoneMirror/zip/refs/tags/v1.8.3
 - Original authors and component notices: licenses/upstream-notices.md
-- Exact copied runtime hashes: runtime-provenance.json
+- Exact packaged runtime hashes and source/binary origin: runtime-provenance.json
 
 The local project contains `src/main.cpp`, `src/logic.h`, `src/ui_theme.h`, the application
 manifest, `build.ps1`, and the complete upstream source snapshot under
 `third_party/capture-engine/`. The build copies the canonical API headers
-from that tree into the ignored `build/vendor/` directory. The small frontend is compiled
-with MSVC C++17 and the Windows SDK. The original capture engine is copied
-without recompilation to preserve the exact baseline that works on this phone.
+from that tree into the ignored `build/vendor/` directory. The small frontend
+is compiled with MSVC C++17 and the Windows SDK. `build-core.ps1` compiles
+the capture engine as C++20 and runs its native regression tests plus a
+rendered-image rotation test. The local engine changes allow 90-degree
+preview rotations and support the installed MSVC 2019/Windows SDK 19041
+toolchain. See `third_party/README.md` for the modified upstream files.
 
 The packaged binary does not contain the upstream managed UI, Python control
 bridge, wireless runtime, or recording/streaming encoder. Do not distribute a

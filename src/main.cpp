@@ -105,6 +105,7 @@ struct Core {
     CORE_API(session_create); CORE_API(session_stop); CORE_API(session_destroy);
     CORE_API(session_get_status); CORE_API(session_get_video_output_status);
     CORE_API(session_attach_preview); CORE_API(session_set_corner_profile);
+    CORE_API(session_set_window_rotation);
     CORE_API(session_set_video_preferences); CORE_API(session_set_pipeline_preferences);
     CORE_API(session_set_audio_enabled); CORE_API(session_set_audio_volume);
     CORE_API(session_copy_latest_video_frame); CORE_API(session_get_latest_video_timestamp);
@@ -120,6 +121,7 @@ struct Core {
         LOAD_CORE(session_create); LOAD_CORE(session_stop); LOAD_CORE(session_destroy);
         LOAD_CORE(session_get_status); LOAD_CORE(session_get_video_output_status);
         LOAD_CORE(session_attach_preview); LOAD_CORE(session_set_corner_profile);
+        LOAD_CORE(session_set_window_rotation);
         LOAD_CORE(session_set_video_preferences); LOAD_CORE(session_set_pipeline_preferences);
         LOAD_CORE(session_set_audio_enabled); LOAD_CORE(session_set_audio_volume);
         LOAD_CORE(session_copy_latest_video_frame); LOAD_CORE(session_get_latest_video_timestamp);
@@ -159,7 +161,7 @@ struct Camera {
 };
 struct Preferences {
     unsigned fps{60}, resolution{}, decoder{}, color{};
-    unsigned usb_mode{};
+    unsigned usb_mode{}, preview_rotation{};
     bool audio{true}, reconnect{true}, portrait_camera{};
     unsigned volume{100};
     std::wstring device;
@@ -193,6 +195,7 @@ Preferences read_preferences(const fs::path& file) {
     value.decoder = std::min(number(L"Decoder", 0), 2U);
     value.color = std::min(number(L"Color", 0), 1U);
     value.usb_mode = std::min(number(L"USBMode", 0), 1U);
+    value.preview_rotation = number(L"PreviewRotation", 0) % 4;
     value.volume = std::min(number(L"Volume", 100), 100U);
     value.audio = number(L"Audio", 1) != 0;
     value.reconnect = number(L"Reconnect", 1) != 0;
@@ -213,6 +216,7 @@ bool save_preferences(const fs::path& file, const Preferences& value) {
     number(L"FPS", value.fps); number(L"Resolution", value.resolution);
     number(L"Decoder", value.decoder); number(L"Color", value.color);
     number(L"USBMode", value.usb_mode);
+    number(L"PreviewRotation", value.preview_rotation);
     number(L"Volume", value.volume); number(L"Audio", value.audio);
     number(L"Reconnect", value.reconnect); number(L"PortraitCamera", value.portrait_camera);
     if (!WritePrivateProfileStringW(L"USBMirror", L"Device", value.device.c_str(), file.c_str())) ok = false;
@@ -240,6 +244,7 @@ struct Snapshot {
     bool desired{}, closing{}, usb_missing{};
     bool audio_packets_received{}, audio_meter_available{};
     float audio_peak{};
+    unsigned preview_rotation{};
 };
 enum class Action { Connect, Disconnect, Refresh, Preferences, CameraToggle, CameraRefresh, UsbPresence, Exit };
 struct Command { Action action; ::Preferences preferences; };
@@ -315,6 +320,7 @@ class Worker {
         capture_lease_.reset();
         snapshot_.capture = {};
         snapshot_.video = {};
+        snapshot_.preview_rotation = 0;
         snapshot_.audio_packets_received = false;
         snapshot_.audio_meter_available = false;
         snapshot_.audio_peak = 0;
@@ -332,6 +338,13 @@ class Worker {
         core_.session_set_pipeline_preferences(session_, preferences_.decoder, preferences_.color);
         core_.session_set_audio_enabled(session_, preferences_.audio ? 1 : 0);
         core_.session_set_audio_volume(session_, preferences_.volume / 100.0F);
+        apply_preview_rotation();
+    }
+    void apply_preview_rotation(bool force = false) {
+        if (!session_ || (!force && snapshot_.preview_rotation == preferences_.preview_rotation)) return;
+        const auto result = core_.session_set_window_rotation(session_, preview_, static_cast<std::int32_t>(preferences_.preview_rotation));
+        if (result == 0) snapshot_.preview_rotation = preferences_.preview_rotation;
+        else snapshot_.message = L"Could not rotate the preview. (Code " + std::to_wstring(result) + L")";
     }
     bool device_present() const {
         return std::any_of(snapshot_.devices.begin(), snapshot_.devices.end(), [&](const DeviceInfo& item) {
@@ -390,6 +403,7 @@ class Worker {
             return;
         }
         snapshot_.message = L"USB connected. Waiting for video...";
+        apply_preview_rotation(true);
         camera_timestamp_ = 0;
         audio_sequence_ = 0;
         audio_measurement_at_ = {};
@@ -583,7 +597,7 @@ public:
 enum ControlId { Devices = 100, Refresh, Connect, ShowPreview, Fps, Resolution, Decoder,
     Color, Audio, Volume, Reconnect, AudioRouting, Driver, CameraButton, CameraSetup,
     CameraPortrait, StatusText, MetricsText, CameraText, Help, AudioLevelText, UsbStandard, UsbCompatibility,
-    ToolsPopup, VolumeText };
+    ToolsPopup, VolumeText, RotateLeft, RotateRight, RotateReset };
 class Application;
 Application* application{};
 LRESULT CALLBACK main_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
@@ -592,7 +606,7 @@ class Application {
     HINSTANCE instance_;
     HFONT font_{}, heading_font_{}, small_font_{}, section_font_{};
     HBRUSH background_{}, preview_background_{}, surface_brush_{}, field_brush_{};
-    HMENU tools_menu_{}, usb_mode_menu_{};
+    HMENU tools_menu_{}, usb_mode_menu_{}, rotation_menu_{};
     HWND heading_{};
     HICON app_icon_{};
     Preferences preferences_;
@@ -647,7 +661,9 @@ class Application {
     }
     void persist() { if (!demo_) save_preferences(settings_, preferences_); }
     void dispatch(Action action) { collect(); persist(); if (worker_) worker_->send(action, preferences_); }
-    void fit_preview(unsigned width, unsigned height) {
+    void fit_preview(unsigned width, unsigned height, unsigned rotation) {
+        const auto oriented = usbmirror::rotated_size(width, height, rotation);
+        width = oriented.width; height = oriented.height;
         if (!width || !height) return;
         const bool orientation_changed = last_width_ && ((last_width_ > last_height_) != (width > height));
         const bool first_frame = !last_width_;
@@ -660,8 +676,12 @@ class Application {
             static_cast<unsigned>(std::max(200L, monitor.rcWork.bottom - monitor.rcWork.top - 140)));
         RECT rectangle{0, 0, static_cast<LONG>(fit.width), static_cast<LONG>(fit.height)};
         AdjustWindowRectExForDpi(&rectangle, WS_OVERLAPPEDWINDOW, FALSE, 0, GetDpiForWindow(preview));
-        SetWindowPos(preview, nullptr, 0, 0, rectangle.right - rectangle.left,
-            rectangle.bottom - rectangle.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        RECT current{}; GetWindowRect(preview, &current);
+        const auto window_width = rectangle.right - rectangle.left;
+        const auto window_height = rectangle.bottom - rectangle.top;
+        const auto x = std::clamp(current.left, monitor.rcWork.left, std::max(monitor.rcWork.left, monitor.rcWork.right - window_width));
+        const auto y = std::clamp(current.top, monitor.rcWork.top, std::max(monitor.rcWork.top, monitor.rcWork.bottom - window_height));
+        SetWindowPos(preview, nullptr, x, y, window_width, window_height, SWP_NOZORDER | SWP_NOACTIVATE);
     }
     void install_camera() {
         const auto runtime = directory_;
@@ -806,6 +826,11 @@ public:
         AppendMenuW(tools_menu_, MF_POPUP, reinterpret_cast<UINT_PTR>(usb_mode_menu_), L"USB mode");
         CheckMenuRadioItem(usb_mode_menu_, UsbStandard, UsbCompatibility,
             preferences_.usb_mode ? UsbCompatibility : UsbStandard, MF_BYCOMMAND);
+        rotation_menu_ = CreatePopupMenu();
+        AppendMenuW(rotation_menu_, MF_STRING, RotateLeft, L"Rotate &left\tCtrl+Left");
+        AppendMenuW(rotation_menu_, MF_STRING, RotateRight, L"Rotate &right\tCtrl+Right");
+        AppendMenuW(rotation_menu_, MF_STRING, RotateReset, L"&Reset rotation\tCtrl+0");
+        AppendMenuW(tools_menu_, MF_POPUP, reinterpret_cast<UINT_PTR>(rotation_menu_), L"Preview rotation");
         AppendMenuW(tools_menu_, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(tools_menu_, MF_STRING, Driver, L"Driver setup...");
         AppendMenuW(tools_menu_, MF_STRING, Help, L"Quick guide");
@@ -818,7 +843,7 @@ public:
             snapshot_.message = L"Connect your iPhone with a USB cable and unlock it.";
             snapshot_.camera_available = true; snapshot_.camera_supported = true;
             snapshot_.usb_missing = true;
-            if (ui_test_state_ == L"streaming") {
+            if (ui_test_state_ == L"streaming" || ui_test_state_ == L"rotation") {
                 DeviceInfo device{}; wcscpy_s(device.name, L"iPhone 18 Pro Max"); wcscpy_s(device.udid, L"demo");
                 wcscpy_s(device.os_version, L"27.0.1"); snapshot_.devices.push_back(device);
                 snapshot_.usb_missing = false; snapshot_.active = true; snapshot_.desired = true;
@@ -851,6 +876,24 @@ public:
     void hide_preview() { preview_visible_ = false; ShowWindow(preview, SW_HIDE); }
     bool demo() const { return demo_; }
     bool active() const { return live_input_; }
+    void rotate_preview(int id) {
+        if (closing_ || snapshot_.busy) return;
+        preferences_.preview_rotation = id == RotateReset ? 0U :
+            usbmirror::rotate_quarters(preferences_.preview_rotation, id == RotateLeft ? -1 : 1);
+        dispatch(Action::Preferences);
+        if (demo_) {
+            snapshot_.preview_rotation = preferences_.preview_rotation;
+            apply_snapshot(snapshot_);
+        }
+        if (!preview_visible_) show_preview();
+    }
+    void preview_menu(int x, int y) {
+        if (x == -1 && y == -1) {
+            RECT rectangle{}; GetWindowRect(preview, &rectangle);
+            x = rectangle.left + 24; y = rectangle.top + 48;
+        }
+        TrackPopupMenuEx(rotation_menu_, TPM_LEFTALIGN | TPM_TOPALIGN, x, y, preview, nullptr);
+    }
     void apply_snapshot(const Snapshot& value) {
         const bool was_active = snapshot_.active;
         const bool was_streaming = live_input_;
@@ -898,6 +941,8 @@ public:
         SetWindowTextW(control(StatusText), status_text);
         EnableMenuItem(usb_mode_menu_, UsbStandard, MF_BYCOMMAND | (value.active || value.busy ? MF_GRAYED : MF_ENABLED));
         EnableMenuItem(usb_mode_menu_, UsbCompatibility, MF_BYCOMMAND | (value.active || value.busy ? MF_GRAYED : MF_ENABLED));
+        for (const auto id : {RotateLeft, RotateRight, RotateReset})
+            EnableMenuItem(rotation_menu_, id, MF_BYCOMMAND | (closing_ || value.busy ? MF_GRAYED : MF_ENABLED));
         const auto audio_level = !live_input_ ? L"Input: waiting for iPhone" :
             !value.audio_packets_received ? L"Input: no recent audio" :
             !value.audio_meter_available ? L"Input: audio received" :
@@ -929,7 +974,7 @@ public:
             text << L"  ·  " << (mode == DecoderRuntimeMode::Hardware ? L"Hardware decode" : mode == DecoderRuntimeMode::Software ? L"Software decode" : L"Decoder starting");
             if (status.audio_sample_rate) text << L"  ·  " << status.audio_sample_rate / 1000 << L" kHz audio";
             SetWindowTextW(control(MetricsText), text.str().c_str());
-            fit_preview(status.width, status.height);
+            fit_preview(status.width, status.height, value.preview_rotation);
             if (!was_streaming && ui_test_output.empty()) show_preview();
         }
         if (value.active && !was_active) persist();
@@ -981,6 +1026,7 @@ public:
             if (id == ShowPreview && event == BN_CLICKED) { show_preview(); return 0; }
             if (id == AudioRouting && event == BN_CLICKED) { ShellExecuteW(window, L"open", L"ms-settings:apps-volume", nullptr, nullptr, SW_SHOWNORMAL); return 0; }
             if (id == Driver) { driver_setup(); return 0; }
+            if (id == RotateLeft || id == RotateRight || id == RotateReset) { rotate_preview(id); return 0; }
             if (id == UsbStandard || id == UsbCompatibility) {
                 if (snapshot_.active || snapshot_.busy) return 0;
                 preferences_.usb_mode = id == UsbCompatibility ? 1U : 0U;
@@ -1017,6 +1063,34 @@ public:
                 KillTimer(window, 3);
                 RECT client{}; GetClientRect(window, &client);
                 unsigned checked{}, outside{};
+                unsigned rotation_checks{}, rotation_failures{};
+                if (ui_test_state_ == L"rotation") {
+                    const auto check_rotation = [&](unsigned expected) {
+                        RECT content{}; GetClientRect(preview, &content);
+                        ++rotation_checks;
+                        if (preferences_.preview_rotation != expected || snapshot_.preview_rotation != expected ||
+                            ((content.right > content.bottom) != (expected % 2 != 0))) ++rotation_failures;
+                    };
+                    SendMessageW(preview, WM_COMMAND, RotateLeft, 0); check_rotation(3);
+                    SendMessageW(preview, WM_COMMAND, RotateReset, 0); check_rotation(0);
+                    for (unsigned expected = 1; expected <= 4; ++expected) {
+                        SendMessageW(preview, WM_COMMAND, RotateRight, 0); check_rotation(expected % 4);
+                    }
+                    BYTE keyboard[256]{};
+                    if (GetKeyboardState(keyboard)) {
+                        BYTE control_keyboard[256]; CopyMemory(control_keyboard, keyboard, sizeof(keyboard));
+                        control_keyboard[VK_CONTROL] = 0x80;
+                        SetKeyboardState(control_keyboard);
+                        SendMessageW(preview, WM_KEYDOWN, VK_LEFT, 0); check_rotation(3);
+                        SendMessageW(preview, WM_KEYDOWN, VK_RIGHT, 0); check_rotation(0);
+                        SendMessageW(preview, WM_KEYDOWN, VK_RIGHT, 0); check_rotation(1);
+                        SendMessageW(preview, WM_KEYDOWN, '0', 0); check_rotation(0);
+                        SetKeyboardState(keyboard);
+                    } else ++rotation_failures;
+                    show_preview(); UpdateWindow(preview);
+                    auto preview_image = ui_test_output; preview_image.replace_filename(L"rotation-preview.bmp");
+                    if (!write_window_bitmap(preview, preview_image)) ++rotation_failures;
+                }
                 for (auto child = GetWindow(window, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT)) {
                     RECT rectangle{}; GetWindowRect(child, &rectangle);
                     MapWindowPoints(HWND_DESKTOP, window, reinterpret_cast<POINT*>(&rectangle), 2);
@@ -1030,6 +1104,7 @@ public:
                     << ",\"screenshotSaved\":" << (image_ok ? "true" : "false")
                     << ",\"liveInputVisible\":" << (live_input_ ? "true" : "false")
                     << ",\"physicalUsbMissing\":" << (snapshot_.usb_missing ? "true" : "false")
+                    << ",\"rotationChecks\":" << rotation_checks << ",\"rotationFailures\":" << rotation_failures
                     << ",\"captureStarted\":false}";
                 report.close(); PostMessageW(window, WM_CLOSE, 0, 0); return 0;
             }
@@ -1105,6 +1180,18 @@ LRESULT CALLBACK main_proc(HWND window, UINT message, WPARAM wparam, LPARAM lpar
 }
 LRESULT CALLBACK preview_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
     if (message == WM_CLOSE && application) { application->hide_preview(); return 0; }
+    if (message == WM_CONTEXTMENU && application) {
+        application->preview_menu(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)); return 0;
+    }
+    if (message == WM_COMMAND && application &&
+        (LOWORD(wparam) == RotateLeft || LOWORD(wparam) == RotateRight || LOWORD(wparam) == RotateReset)) {
+        application->rotate_preview(LOWORD(wparam)); return 0;
+    }
+    if (message == WM_KEYDOWN && application && GetKeyState(VK_CONTROL) < 0) {
+        if (wparam == VK_LEFT) { application->rotate_preview(RotateLeft); return 0; }
+        if (wparam == VK_RIGHT) { application->rotate_preview(RotateRight); return 0; }
+        if (wparam == '0' || wparam == VK_NUMPAD0) { application->rotate_preview(RotateReset); return 0; }
+    }
     if (message == WM_GETMINMAXINFO) {
         auto* info = reinterpret_cast<MINMAXINFO*>(lparam); info->ptMinTrackSize = {240, 180}; return 0;
     }
@@ -1129,6 +1216,21 @@ int self_test(const fs::path& output, bool probe) {
     test(usbmirror::fit(1080, 1920, 1280, 720).height == 720);
     test(usbmirror::fit(0, 1920, 1280, 720).width == 0);
     test(usbmirror::fit(480, 640, 1280, 720).width == 480);
+    test(usbmirror::rotate_quarters(0, -1) == 3 && usbmirror::rotate_quarters(3, 1) == 0);
+    test(usbmirror::rotate_quarters(1, -1) == 0 && usbmirror::rotate_quarters(0, 4) == 0);
+    test(usbmirror::rotated_size(1206, 2620, 1).width == 2620);
+    test(usbmirror::rotated_size(1206, 2620, 3).height == 1206);
+    test(usbmirror::rotated_size(1206, 2620, 2).height == 2620);
+    {
+        auto file = output; file.replace_extension(L"rotation-settings.ini");
+        ::Preferences original; original.preview_rotation = 3; original.volume = 42;
+        const auto saved = save_preferences(file, original);
+        const auto restored = read_preferences(file);
+        test(saved && restored.preview_rotation == 3 && restored.volume == 42);
+        WritePrivateProfileStringW(L"USBMirror", L"PreviewRotation", nullptr, file.c_str());
+        test(read_preferences(file).preview_rotation == 0);
+        std::error_code error; fs::remove(file, error);
+    }
     test(usbmirror::retry_seconds(0) == 2 && usbmirror::retry_seconds(100) == 32);
     test(usbmirror::valid_fps(120) && usbmirror::valid_fps(0) && !usbmirror::valid_fps(100000));
     test(!usbmirror::should_auto_connect(true, true, false, true, true, true));

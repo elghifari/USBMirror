@@ -46,9 +46,20 @@ connected phone:
 Driver installation/removal and rollback have not yet been tested end to
 end in this build. See [VALIDATION.md](VALIDATION.md) for the current scope.
 
+## Preview rotation
+
+If a landscape game appears sideways, right-click the preview and choose
+**Rotate left** or **Rotate right**. The same commands are available under
+**Tools > Preview rotation**. With the preview focused, use **Ctrl+Left**,
+**Ctrl+Right**, or **Ctrl+0** to reset.
+
+USB Mirror resizes the window to match and remembers your rotation setting.
+This rotates the preview captured by window-capture software. Virtual-camera
+output retains the original source orientation.
+
 ## App details
 
-Version 0.4.1 uses a dark native interface, flat controls, section separators,
+Version 0.4.2 uses a dark native interface, flat controls, section separators,
 plain connection status and an audio level bar. It omits the header slogan and
 idle footer instructions. Themed controls retain native keyboard and accessibility
 providers. Windows device-change notifications trigger read-only USB-presence
@@ -83,14 +94,16 @@ launch, repairs missing/modified files, and retains the cache so helper paths
 and optional virtual-camera registrations remain usable. No updater or new
 runtime framework is involved. It still uses files on disk internally.
 
-Requirements: x64 MSVC C++ Build Tools (VS 2019 or newer) and Windows SDK. The
-main upstream core is not rebuilt by this project; newer C++20 build tools are
-needed to rebuild it from source.
+Requirements: x64 MSVC C++ Build Tools (VS 2019 16.11 or newer), Windows SDK
+10.0.19041 or newer, and CMake 3.20 or newer. The CMake tools bundled with
+Visual Studio Build Tools are supported. The build compiles the capture
+engine as C++20 through `build-core.ps1`, then compiles the C++17 frontend.
 
 The pinned v1.8.3 dependency is included as readable files in
 [`third_party/capture-engine`](third_party/capture-engine). Its driver source
 is expanded too. See [`third_party/README.md`](third_party/README.md) for
-provenance and layout details. Supply the matching v1.8.3 capture runtime:
+provenance and local changes. Supply the matching v1.8.3 runtime for the
+unchanged USB libraries, configuration helper and optional camera components:
 
 ```powershell
 .\build.ps1 -RuntimeSource 'C:\CaptureRuntime'
@@ -110,8 +123,9 @@ compiles their resources with the Windows SDK resource compiler. See
 The USB mode selector maps Standard to upstream A/Demo (0) and Compatibility
 to upstream B (1), stored as `USBMode` in the user's settings. This user's
 working profile is set to Compatibility; new profiles default to Standard.
-The capture engine remains unmodified. See `VALIDATION.md` for the observed
-resolution difference and the limits of the live audio check.
+The capture engine has a local fix to accept 90-degree preview rotations.
+See `VALIDATION.md` for the observed resolution difference and the limits of
+the live audio check.
 
 ## Validation scope
 

@@ -1,4 +1,4 @@
-USB Mirror 0.4.1 - USB mirroring for Windows
+USB Mirror 0.4.2 - USB mirroring for Windows
 
 1. Close other apps that are mirroring your phone before connecting here.
 2. Run the single-file USBMirror.exe. It prepares its own runtime files.
@@ -38,6 +38,14 @@ The exact reason audio started has not been isolated. Compatibility produced
 
 Local size and FPS settings only affect presentation on Windows. They do not
 set the game's FPS or force a higher incoming capture rate from the phone.
+
+Preview rotation
+If a landscape game appears sideways, right-click the preview and choose
+Rotate left or Rotate right. These commands are also under Tools > Preview
+rotation. With the preview focused, Ctrl+Left and Ctrl+Right rotate by 90
+degrees; Ctrl+0 resets the rotation. The window resizes to match, and USB
+Mirror saves the setting for the next connection. Rotation affects the
+preview and window capture; virtual-camera output keeps its source orientation.
 
 Audio
 Game sound uses normal Windows audio playback. Use Windows audio routing to
@@ -100,8 +108,9 @@ contains 16, 20, 24, 32, 40, 48, 64, 128 and 256 pixel images.
 What was removed
 No WPF/.NET UI runtime, bundled Python, remote control, device-profile binder,
 AirPlay/DLNA receiver, streaming encoder, built-in recording or updater runs
-in this frontend. The original native capture DLL remains unmodified and
-contains dormant upstream APIs. No wireless receiver is started.
+in this frontend. The native capture DLL is built from the included source
+with a preview-rotation fix and toolchain compatibility changes. It retains
+dormant upstream APIs. No wireless receiver is started.
 
 Validation
 Build-time checks load the real native capture/camera DLLs, verify their API,

@@ -116,10 +116,12 @@ GUID input_subtype(coremedia::VideoCodec codec) {
 }
 
 coremedia::ColorPrimaries map_primaries(UINT32 value) noexcept {
+    // Windows SDK 19041 predates the MFVideoPrimaries_Display_P3 enum member.
+    constexpr UINT32 DisplayP3Primaries = 13;
     switch (value) {
     case MFVideoPrimaries_BT709: return coremedia::ColorPrimaries::Bt709;
     case MFVideoPrimaries_BT2020: return coremedia::ColorPrimaries::Bt2020;
-    case MFVideoPrimaries_Display_P3: return coremedia::ColorPrimaries::DisplayP3;
+    case DisplayP3Primaries: return coremedia::ColorPrimaries::DisplayP3;
     default: return coremedia::ColorPrimaries::Unspecified;
     }
 }

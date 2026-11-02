@@ -2076,7 +2076,7 @@ std::int32_t IM_CALL im_session_set_window_rotation(iPhoneMirror::SessionHandle 
     // A rotation is a local preview preference. Reconfiguring the QuickTime
     // display stream here sends HPD0/HPD1 over USB and can make iOS terminate
     // an otherwise healthy mirroring session during a game orientation change.
-    found->second->set_rotation(normalized == 2 ? 2 : 0);
+    found->second->set_rotation(normalized);
     return static_cast<std::int32_t>(iPhoneMirror::Result::Ok);
 }
 
